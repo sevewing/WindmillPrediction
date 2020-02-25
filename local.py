@@ -20,6 +20,7 @@ def load_parquet_from_weather_toPandas(path, schema:StructType = None):
     """
     weather = load_parquet(path) \
                     .withColumnRenamed("__index_level_0__", "TIME") \
+                    .dropna() \
                     .withColumn("id", monotonically_increasing_id())
     weather.createOrReplaceTempView("weather_temp")
     weather_dic = spark.sql("select * from weather_temp where id in (select max(id) as id from weather_temp group by TIME)").toPandas()
@@ -29,13 +30,26 @@ def load_csv(path, schema:StructType = None):
     """
     load csv file
     """
-    return sqlContext.read.schema(schema).csv(path, sep=";", header=True, schema=schema) if schema is not None else sqlContext.read.schema(schema).csv(path, sep=";", header=True)
+    # return sqlContext.read.schema(schema).csv(path, sep=";", header=True, schema=schema) if schema is not None else sqlContext.read.schema(schema).csv(path, sep=";", header=True)
+    return sqlContext.read.csv(path, sep=";", header=True, schema=schema)
 
-def regist_udf_grid(name:str, df:pd.DataFrame, type = DoubleType()):
-    _ = spark.udf.register(name, lambda g, t: list(df[df['TIME'] == t][g])[0], type)
+def udf_by_grid(df:pd.DataFrame, type = DoubleType()):
+    return udf(lambda g, t: list(df[df['TIME'] == t][g])[0], type)
 
-# def regist_udf_ws(name:str):
-    # _ = spark.udf.register(name, lambda s1, d1, s2, d2: tools.wind_convert(s1, d1, s2, d2), DoubleType())
+def udf_by_ws():
+    schema = StructType([
+        StructField("u_interp", DoubleType(), True),
+        StructField("v_interp", DoubleType(), True)
+    ])
+    return udf(lambda s1, d1, s2, d2, z: tools.wind_interp(s1, d1, s2, d2, z), schema)
+
+def udf_regist():
+    udf_ws10  = udf_by_grid(ws10_dic, DoubleType())
+    udf_ws100  = udf_by_grid(ws100_dic, DoubleType())
+    udf_wd10  = udf_by_grid(wd10_dic, IntegerType())
+    udf_wd100  = udf_by_grid(wd100_dic, IntegerType())
+    udf_ws_interp  = udf_by_ws()
+    return udf_ws10, udf_ws100, udf_wd10, udf_wd100, udf_ws_interp
 
 
 if __name__ == "__main__":
@@ -51,52 +65,29 @@ if __name__ == "__main__":
 
     # using SQLContext to read parquet file
     sqlContext = SQLContext(sc)
-
+       
     # to read parquet file
-    settlement = load_parquet("data/ITU_DATA/settlement/2018.parquet" ,schemas.settlement_schema) \
-                 .fillna({"VAERDI":0})
-    settlement = settlement.withColumn("VAERDI", settlement["VAERDI"].cast(DoubleType())).where("TIME_CET like '%:00:%'").select("*")
-    settlement.createOrReplaceTempView("settlement")
+    settlement = load_parquet("data/ITU_DATA/settlement/2019.parquet" ,schemas.settlement_schema)
+    settlement = settlement.dropna(subset =["VAERDI"]) \
+                .withColumn("VAERDI", settlement["VAERDI"].cast("double")) \
+                .where("TIME_CET like '%:00:%'")
+    settlement = settlement.sample(fraction=0.00001, seed=3)
 
-    windmills = load_csv("data/windmill_cleaned.csv", schemas.windmills_schema)
-    windmills.createOrReplaceTempView("windmills")
-    # windmills = spark.sql("select * from windmills where grid != 0")
-    # windmills.createOrReplaceTempView("windmills")
+    windmills = load_csv("data/windmill_cleaned.csv", schemas.windmills_schema) \
+                .where("Navhub_height is not null") \
+                .where("grid != 0")
 
     ws10_dic = load_parquet_from_weather_toPandas("data/ITU_DATA/prognosis/ENetNEA/wind_speed_10m.parquet")
     ws100_dic = load_parquet_from_weather_toPandas("data/ITU_DATA/prognosis/ENetNEA/wind_speed_100m.parquet")
     wd10_dic = load_parquet_from_weather_toPandas("data/ITU_DATA/prognosis/ENetNEA/wind_direction_10m.parquet")
     wd100_dic = load_parquet_from_weather_toPandas("data/ITU_DATA/prognosis/ENetNEA/wind_direction_100m.parquet")
 
-    regist_udf_grid("extract_ws10", ws10_dic, DoubleType())
-    regist_udf_grid("extract_ws100", ws100_dic, DoubleType())
-    regist_udf_grid("extract_wd10", wd10_dic, IntegerType())
-    regist_udf_grid("extract_wd100", wd100_dic, IntegerType())
-    # regist_udf_ws("interp_ws")
+    udf_ws10, udf_ws100, udf_wd10, udf_wd100, udf_ws_interp = udf_regist()
+
+    basicDF = settlement.join(windmills, on="GSRN") \
+                    .withColumn("ws10", udf_ws10(windmills.grid, settlement.TIME_CET)) \
+                    .withColumn("ws100", udf_ws100(windmills.grid, settlement.TIME_CET)) \
+                    .withColumn("wd10", udf_wd10(windmills.grid, settlement.TIME_CET)) \
+                    .withColumn("wd100", udf_wd100(windmills.grid, settlement.TIME_CET))
 
 
-    schema = StructType([
-        StructField("u_interp", DoubleType(), True),
-        StructField("v_interp", DoubleType(), True)
-    ])
-    udf_ws = udf(lambda s1, d1, s2, d2, z: tools.wind_convert(s1, d1, s2, d2, z), schema)
-
-# basicDF = spark.sql("select s.GSRN, s.TIME_CET, s.VAERDI, w.Turbine_type, w.Parent_GSRN, w.Placement, w.UTM_x, w.UTM_y, "
-#                 "w.Capacity_kw, w.Rotor_diameter, w.Navhub_height, w.grid, w.grid_in_range, "
-#                 "extract_ws10(w.grid, s.TIME_CET) as ws10, extract_ws100(w.grid, s.TIME_CET) as ws100 "
-#                 "from settlement s join windmills w on s.GSRN = w.GSRN where w.grid != 0")
-
-    basicDF = spark.sql(
-    "select s.GSRN, s.TIME_CET, w.Navhub_height, "
-    "extract_ws10(w.grid, s.TIME_CET) as ws10, extract_ws100(w.grid, s.TIME_CET) as ws100, "
-    "extract_wd10(w.grid, s.TIME_CET) as wd10, extract_wd100(w.grid, s.TIME_CET) as wd100 "
-    "from settlement s join windmills w on s.GSRN == w.GSRN where w.grid != 0")
-    basicDF.withColumn("wsCol", udf_ws("ws10","wd10","ws100","wd10","Navhub_height")) \
-            .select("wsCol.u_interp", "wsCol.v_interp").show(1)
-    # basicDF.createOrReplaceTempView("basicDF")
-
-
-
-# .select("wsCol(0)".alias("u_interp"), "wsCol"(1).alias("v_interp"))
-    
-    
