@@ -1,6 +1,5 @@
 from math import log,sqrt,atan2,pi,cos,sin
 
-
 pow_law = lambda v10, v100, z_hat, a : v100 * ( (z_hat/100) ** a) + 1e-06
 
 def _wind_speed_to_vector(s, d):
@@ -26,5 +25,10 @@ def wind_interp(s1, d1, s2, d2, z):
     u2, v2 = _wind_speed_to_vector(s2, d2)
     u_i = _pow_interpolation(u1, u2, z)
     v_i = _pow_interpolation(v1, v2, z)
-
+_i
     return u_i, v_i
+
+def tmp_interp(t1, t2, z):
+    t_i = _pow_interpolation(t1, t2, z)
+
+    return t_i
