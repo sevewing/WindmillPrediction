@@ -15,9 +15,9 @@ windmills_schema = StructType([
     StructField("Placement",StringType(),True),
     StructField("UTM_x",StringType(),True),
     StructField("UTM_y",StringType(),True),
-    StructField("Capacity_kw", DoubleType(), True),
-    StructField("Rotor_diameter", DoubleType(), True),
-    StructField("Navhub_height", DoubleType(), False),
+    StructField("Capacity_kw", FloatType(), True),
+    StructField("Rotor_diameter", FloatType(), True),
+    StructField("Navhub_height", FloatType(), False),
     StructField("grid", StringType(), False),
     StructField("grid_in_range",StringType(),True)
 ])						

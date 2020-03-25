@@ -2,7 +2,7 @@ from math import log,sqrt,atan2,pi,cos,sin
 
 pow_law = lambda v2, z2, z_hat, a : v2 * ( (z_hat/z2) ** a) + 1e-06
 
-def _wind_speed_to_vector(s, d):
+def wind_speed_to_vector(s, d):
     u = s * cos(pi/180 * (270-d))
     v = s * sin(pi/180 * (270-d))
     return u, v
@@ -21,8 +21,8 @@ def _pow_interpolation(v1, v2, z1, z2, z_hat):
 
 
 def wind_interp(s1, d1, s2, d2, z_hat):
-    u1, v1 = _wind_speed_to_vector(s1, d1)
-    u2, v2 = _wind_speed_to_vector(s2, d2)
+    u1, v1 = wind_speed_to_vector(s1, d1)
+    u2, v2 = wind_speed_to_vector(s2, d2)
     u_i = _pow_interpolation(u1, u2, 10, 100, z_hat)
     v_i = _pow_interpolation(v1, v2, 10, 100, z_hat)
     return u_i, v_i
