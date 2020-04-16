@@ -1,9 +1,12 @@
+import pandas as pd
 from math import log,sqrt,atan2,pi,cos,sin
+
 from pyspark.conf import SparkConf
 from pyspark.sql import SparkSession, SQLContext
-from pyspark.sql.functions import monotonically_increasing_id, udf
+from pyspark.sql.functions import monotonically_increasing_id, udf, sum, max, avg
 from pyspark.sql.types import *
-import pandas as pd
+
+import constant
 
 pow_law = lambda v2, z2, z_hat, a : v2 * ( (z_hat/z2) ** a) + 1e-06
 
@@ -35,21 +38,25 @@ def wind_interp(s1, d1, s2, d2, z_hat):
 cols = ["GSRN", "TIME_CET", "Turbine_type", "Placement", "Capacity_kw", "Rotor_diameter", "Navhub_height", "Slope", "roughness", "VAERDI"]
 
 class Aggregate:
-    def __init__(self, ws10_dic, ws100_dic, wd10_dic, wd100_dic):
+    def __init__(self, spark):
+        ws10_dic = spark.load_weather_toPandas(constant.ws10_path)
+        ws100_dic = spark.load_weather_toPandas(constant.ws10_path)
+        wd10_dic = spark.load_weather_toPandas(constant.wd10_path)
+        wd100_dic = spark.load_weather_toPandas(constant.wd100_path)
         self.udf_type = udf(lambda x: {"H": 1.0, "W": 2.0, "P": 3.0, "M": 4.0}.get(x, 0.0), FloatType())
         self.udf_placement = udf(lambda x: {"LAND": 1.0, "HAV": 2.0}.get(x, 0.0), FloatType())
         self.udf_month = udf(lambda x: int(x[5:7]), IntegerType())
         self.udf_hour = udf(lambda x: int(x[11:13]), IntegerType())
-        self.udf_ws10  = self.udf_by_grid(ws10_dic, FloatType())
-        self.udf_ws100  = self.udf_by_grid(ws100_dic, FloatType())
-        self.udf_wd10  = self.udf_by_grid(wd10_dic, IntegerType())
-        self.udf_wd100  = self.udf_by_grid(wd100_dic, IntegerType())
-        self.udf_ws_interp  = self.udf_by_ws()
+        self.udf_ws10  = self._udf_by_grid(ws10_dic, FloatType())
+        self.udf_ws100  = self._udf_by_grid(ws100_dic, FloatType())
+        self.udf_wd10  = self._udf_by_grid(wd10_dic, IntegerType())
+        self.udf_wd100  = self._udf_by_grid(wd100_dic, IntegerType())
+        self.udf_ws_interp  = self._udf_by_ws()
 
-    def udf_by_grid(self, df:pd.DataFrame, type = FloatType()):
+    def _udf_by_grid(self, df:pd.DataFrame, type = FloatType()):
         return udf(lambda g, t: list(df[df['TIME'] == t[:14]+'00:00'][g])[0], type)
 
-    def udf_by_ws(self):
+    def _udf_by_ws(self):
         schema = StructType([
             StructField("u_interp", FloatType(), True),
             StructField("v_interp", FloatType(), True)
@@ -69,26 +76,39 @@ class Aggregate:
    
         return df
 
-    def aggregate_with_interp(self, df, join_df):
+    def interp(self, df, join_df):
         df = aggregate(df, join_df)
         df = df.withColumn("wsCol", \
                     self.udf_ws_interp(df.ws10, df.wd10, df.ws100, df.wd100, df.Navhub_height)) \
                     .select(cols, "month", "hour", "wsCol.u_interp", "wsCol.v_interp")
         return df
 
+    def upscaling(self, df, join_df):
+        cols = ["TIME_CET", "Slope", "roughness", "grid", "VAERDI"]
+        df = df.join(join_df, on="GSRN").select(cols)
+
+        df = df.groupby("TIME_CET", "grid") \
+                .agg(avg("Slope").alias("Slope"), \
+                avg("roughness").alias("roughness"), \
+                sum("VAERDI").alias("VAERDI"))
+
+        df = df.withColumn("month", self.udf_month(df.TIME_CET)) \
+                .withColumn("hour", self.udf_hour(df.TIME_CET)) \
+                .withColumn("ws10", self.udf_ws10(df.grid, df.TIME_CET)) \
+                .withColumn("ws100", self.udf_ws100(df.grid, df.TIME_CET)) \
+                .withColumn("wd10", self.udf_wd10(df.grid, df.TIME_CET)) \
+                .withColumn("wd100", self.udf_wd100(df.grid, df.TIME_CET))
+   
+        return df
+
 class Spk:
     def __init__(self):
         # initialise sparkContext\
         self.spark = SparkSession.builder \
-            .master("local[*]") \
-            .appName("WindTurbine") \
-            .config("spark.executor.memory", "8g") \
-            .config("spark.cores.max", "4") \
+            .appName("WindTurbine_ws") \
             .getOrCreate()
 
         sc = self.spark.sparkContext
-
-        # using SQLContext to read parquet file
         self.sqlContext = SQLContext(sc)
 
     def load_parquet(self, path, schema:StructType = None):
