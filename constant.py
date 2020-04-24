@@ -1,11 +1,12 @@
 from pyspark.sql.types import *
 
-# windmill_path = "/user/liwb/windmill_cleaned.csv"
+# windmill_path = "./windmill_cleaned.csv"
 # settlement_path = "/datasets/energinet/settlement/2019.parquet"
 # ws10_path = "/datasets/energinet/prognosis/ENetNEA/wind_speed_10m.parquet"
 # ws100_path = "/datasets/energinet/prognosis/ENetNEA/wind_speed_100m.parquet"
 # wd10_path = "/datasets/energinet/prognosis/ENetNEA/wind_direction_10m.parquet"
 # wd100_path = "/datasets/energinet/prognosis/ENetNEA/wind_direction_100m.parquet" 
+# model_path = "./model.parquet"
 
 windmill_path = "data/windmill_cleaned.csv"
 settlement_path = "data/ITU_DATA/settlement/2019.parquet"
@@ -13,6 +14,7 @@ ws10_path = "data/ITU_DATA/prognosis/ENetNEA/wind_speed_10m.parquet"
 ws100_path = "data/ITU_DATA/prognosis/ENetNEA/wind_speed_100m.parquet"
 wd10_path = "data/ITU_DATA/prognosis/ENetNEA/wind_direction_10m.parquet"
 wd100_path = "data/ITU_DATA/prognosis/ENetNEA/wind_direction_100m.parquet" 
+model_path = "model.parquet"
 
 settlement_schema = StructType([
     StructField("GSRN", StringType(), False),

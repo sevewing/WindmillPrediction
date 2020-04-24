@@ -1,12 +1,8 @@
 import pandas as pd
 from math import log,sqrt,atan2,pi,cos,sin
 
-from pyspark.conf import SparkConf
-from pyspark.sql import SparkSession, SQLContext
-from pyspark.sql.functions import monotonically_increasing_id, udf, sum, max, avg
+from pyspark.sql.functions import udf, sum, max, avg, first
 from pyspark.sql.types import *
-
-import constant
 
 pow_law = lambda v2, z2, z_hat, a : v2 * ( (z_hat/z2) ** a) + 1e-06
 
@@ -35,102 +31,81 @@ def wind_interp(s1, d1, s2, d2, z_hat):
     return u_i, v_i
 
 
-cols = ["GSRN", "TIME_CET", "Turbine_type", "Placement", "Capacity_kw", "Rotor_diameter", "Navhub_height", "Slope", "roughness", "VAERDI"]
+cols_basic = ["GSRN", "TIME_CET", "Turbine_type", "Placement", "Capacity_kw", "Rotor_diameter", "Navhub_height", "Slope", "roughness", "VAERDI", "grid"]
 
-class Aggregate:
-    def __init__(self, spark):
-        ws10_dic = spark.load_weather_toPandas(constant.ws10_path)
-        ws100_dic = spark.load_weather_toPandas(constant.ws10_path)
-        wd10_dic = spark.load_weather_toPandas(constant.wd10_path)
-        wd100_dic = spark.load_weather_toPandas(constant.wd100_path)
-        self.udf_type = udf(lambda x: {"H": 1.0, "W": 2.0, "P": 3.0, "M": 4.0}.get(x, 0.0), FloatType())
-        self.udf_placement = udf(lambda x: {"LAND": 1.0, "HAV": 2.0}.get(x, 0.0), FloatType())
-        self.udf_month = udf(lambda x: int(x[5:7]), IntegerType())
-        self.udf_hour = udf(lambda x: int(x[11:13]), IntegerType())
-        self.udf_ws10  = self._udf_by_grid(ws10_dic, FloatType())
-        self.udf_ws100  = self._udf_by_grid(ws100_dic, FloatType())
-        self.udf_wd10  = self._udf_by_grid(wd10_dic, IntegerType())
-        self.udf_wd100  = self._udf_by_grid(wd100_dic, IntegerType())
-        self.udf_ws_interp  = self._udf_by_ws()
+def _udf_by_grid(df:pd.DataFrame, type = FloatType()):
+    return udf(lambda g, t: list(df[df['TIME'] == t[:14]+'00:00'][g])[0], type)
 
-    def _udf_by_grid(self, df:pd.DataFrame, type = FloatType()):
-        return udf(lambda g, t: list(df[df['TIME'] == t[:14]+'00:00'][g])[0], type)
+def _udf_by_ws():
+    schema = StructType([
+        StructField("u_interp", FloatType(), True),
+        StructField("v_interp", FloatType(), True)
+    ])
+    return udf(lambda s1, d1, s2, d2, z: wind_interp(s1, d1, s2, d2, z), schema)
 
-    def _udf_by_ws(self):
-        schema = StructType([
-            StructField("u_interp", FloatType(), True),
-            StructField("v_interp", FloatType(), True)
-        ])
-        return udf(lambda s1, d1, s2, d2, z: wind_interp(s1, d1, s2, d2, z), schema)
+udic={}
+def get_udf(ws10_dic,ws100_dic,wd10_dic,wd100_dic):
+    udic["type"] = udf(lambda x: {"H": 1.0, "W": 2.0, "P": 3.0, "M": 4.0}.get(x, 0.0), FloatType())
+    udic["placement"] = udf(lambda x: {"LAND": 1.0, "HAV": 2.0}.get(x, 0.0), FloatType())
+    udic["month"] = udf(lambda x: int(x[5:7]), IntegerType())
+    udic["hour"] = udf(lambda x: int(x[11:13]), IntegerType())
+    udic["mins"] = udf(lambda x: int(x[14:16]), IntegerType())
+    udic["ws10"]  = _udf_by_grid(ws10_dic, FloatType())
+    udic["ws100"]  = _udf_by_grid(ws100_dic, FloatType())
+    udic["wd10"]  = _udf_by_grid(wd10_dic, IntegerType())
+    udic["wd100"]  = _udf_by_grid(wd100_dic, IntegerType())
+    udic["ws_interp"]  = _udf_by_ws()
 
-    def aggregate(self, df, join_df):
-        df = df.join(join_df, on="GSRN") \
-                        .select(cols,"grid")
 
-        df = df.withColumn("month", self.udf_month(df.TIME_CET)) \
-                .withColumn("hour", self.udf_hour(df.TIME_CET)) \
-                .withColumn("ws10", self.udf_ws10(df.grid, df.TIME_CET)) \
-                .withColumn("ws100", self.udf_ws100(df.grid, df.TIME_CET)) \
-                .withColumn("wd10", self.udf_wd10(df.grid, df.TIME_CET)) \
-                .withColumn("wd100", self.udf_wd100(df.grid, df.TIME_CET))
-   
-        return df
+def _normal_f_extract(df):
+    return df.withColumn("month", udic["month"](df.TIME_CET)) \
+                .withColumn("hour", udic["hour"](df.TIME_CET)) \
+                .withColumn("mins", udic["mins"](df.TIME_CET)) \
+                .withColumn("ws10", udic["ws10"](df.grid, df.TIME_CET)) \
+                .withColumn("ws100", udic["ws100"](df.grid, df.TIME_CET)) \
+                .withColumn("wd10", udic["wd10"](df.grid, df.TIME_CET)) \
+                .withColumn("wd100", udic["wd100"](df.grid, df.TIME_CET))
+                
+def aggregate(df, join_df):
+    df = df.join(join_df, on="GSRN").select(cols_basic)
+    df = _normal_f_extract(df) \
+        .withColumn("Turbine_type", udic["type"](df.Turbine_type)) \
+        .withColumn("Placement", udic["placement"](df.Placement))
+    return df
 
-    def interp(self, df, join_df):
-        df = aggregate(df, join_df)
-        df = df.withColumn("wsCol", \
-                    self.udf_ws_interp(df.ws10, df.wd10, df.ws100, df.wd100, df.Navhub_height)) \
-                    .select(cols, "month", "hour", "wsCol.u_interp", "wsCol.v_interp")
-        return df
+def interp(df, join_df):
+    cols = cols_basic + ["month", "hour", "mins","wsCol.u_interp", "wsCol.v_interp"]
+    df = aggregate(df, join_df)
+    df = df.withColumn("wsCol", \
+                udic["ws_interp"](df.ws10, df.wd10, df.ws100, df.wd100, df.Navhub_height)) \
+                .select(cols)
+    return df
 
-    def upscaling(self, df, join_df):
-        cols = ["TIME_CET", "Slope", "roughness", "grid", "VAERDI"]
-        df = df.join(join_df, on="GSRN").select(cols)
+def upscaling(df, join_df):
+    df = df.join(join_df, on="GSRN").select(cols_basic)
+    # cols = cols_basic + ["month", "hour", "mins"]
+    df = df.groupby("TIME_CET", "grid") \
+            .agg(first("Slope").alias("Slope"), \
+            first("roughness").alias("roughness"), \
+            sum("VAERDI").alias("VAERDI"))
+            # .select(cols)
+    df = _normal_f_extract(df)
 
-        df = df.groupby("TIME_CET", "grid") \
-                .agg(avg("Slope").alias("Slope"), \
-                avg("roughness").alias("roughness"), \
-                sum("VAERDI").alias("VAERDI"))
+    return df
 
-        df = df.withColumn("month", self.udf_month(df.TIME_CET)) \
-                .withColumn("hour", self.udf_hour(df.TIME_CET)) \
-                .withColumn("ws10", self.udf_ws10(df.grid, df.TIME_CET)) \
-                .withColumn("ws100", self.udf_ws100(df.grid, df.TIME_CET)) \
-                .withColumn("wd10", self.udf_wd10(df.grid, df.TIME_CET)) \
-                .withColumn("wd100", self.udf_wd100(df.grid, df.TIME_CET))
-   
-        return df
+def normalize_zcenter(df):
+    """
+    Normalize value to zero centered.
+    """
+    return (df - df.mean()) / df.std()
 
-class Spk:
-    def __init__(self):
-        # initialise sparkContext\
-        self.spark = SparkSession.builder \
-            .appName("WindTurbine_ws") \
-            .getOrCreate()
+def normalize_maxmin(data, max=1, min=0):
+    """
+    Normalize the data to real values(from new max 0 to new min 1).
+    """
+    return (data - data.min()) / (data.max() - data.min()) * (max - min) + min
 
-        sc = self.spark.sparkContext
-        self.sqlContext = SQLContext(sc)
-
-    def load_parquet(self, path, schema:StructType = None):
-        """
-        load apache parquet file
-        """
-        return self.sqlContext.read.schema(schema).parquet(path) if schema is not None else self.sqlContext.read.parquet(path)
-
-    def load_weather_toPandas(self, path, schema:StructType = None):
-        """
-        load apache parquet file
-        """
-        weather = self.load_parquet(path) \
-                        .withColumnRenamed("__index_level_0__", "TIME") \
-                        .dropna() \
-                        .withColumn("id", monotonically_increasing_id())
-        weather.createOrReplaceTempView("weather_temp")
-        weather_dic = self.spark.sql("select * from weather_temp where id in (select max(id) as id from weather_temp group by TIME)").toPandas()
-        return weather_dic
-
-    def load_windmill(self, path, schema:StructType = None):
-        """
-        load csv file
-        """
-        return self.sqlContext.read.csv(path, sep=",", header=True, schema=schema)
+def save_list(lst, path):
+    with open(path, 'w+') as f:
+        for i in lst:
+            f.write("%s\n" % i) 
