@@ -44,7 +44,7 @@ def _udf_by_ws():
     return udf(lambda s1, d1, s2, d2, z: wind_interp(s1, d1, s2, d2, z), schema)
 
 udic={}
-def get_udf(ws10_dic,ws100_dic,wd10_dic,wd100_dic):
+def get_udf(ws10_dic,ws100_dic,wd10_dic,wd100_dic,tmp2_dic,tmp100_dic):
     udic["type"] = udf(lambda x: {"H": 1.0, "W": 2.0, "P": 3.0, "M": 4.0}.get(x, 0.0), FloatType())
     udic["placement"] = udf(lambda x: {"LAND": 1.0, "HAV": 2.0}.get(x, 0.0), FloatType())
     udic["month"] = udf(lambda x: int(x[5:7]), IntegerType())
@@ -54,6 +54,8 @@ def get_udf(ws10_dic,ws100_dic,wd10_dic,wd100_dic):
     udic["ws100"]  = _udf_by_grid(ws100_dic, FloatType())
     udic["wd10"]  = _udf_by_grid(wd10_dic, IntegerType())
     udic["wd100"]  = _udf_by_grid(wd100_dic, IntegerType())
+    udic["tmp2"]  = _udf_by_grid(tmp2_dic, FloatType())
+    udic["tmp100"]  = _udf_by_grid(tmp100_dic, FloatType())
     udic["ws_interp"]  = _udf_by_ws()
 
 
@@ -64,7 +66,9 @@ def _normal_f_extract(df):
                 .withColumn("ws10", udic["ws10"](df.grid, df.TIME_CET)) \
                 .withColumn("ws100", udic["ws100"](df.grid, df.TIME_CET)) \
                 .withColumn("wd10", udic["wd10"](df.grid, df.TIME_CET)) \
-                .withColumn("wd100", udic["wd100"](df.grid, df.TIME_CET))
+                .withColumn("wd100", udic["wd100"](df.grid, df.TIME_CET)) \
+                .withColumn("tmp2", udic["tmp2"](df.grid, df.TIME_CET)) \
+                .withColumn("tmp100", udic["tmp100"](df.grid, df.TIME_CET))
                 
 def aggregate(df, join_df):
     df = df.join(join_df, on="GSRN").select(cols_basic)
