@@ -34,7 +34,7 @@ def wind_interp(s1, d1, s2, d2, z_hat):
 cols_basic = ["GSRN", "TIME_CET", "Turbine_type", "Placement", "Capacity_kw", "Rotor_diameter", "Navhub_height", "Slope", "roughness", "VAERDI", "grid"]
 
 def _udf_by_grid(df:pd.DataFrame, type = FloatType()):
-    return udf(lambda g, t: list(df[df['TIME'] == t[:14]+'00:00'][g])[0], type)
+    return udf(lambda g, t: list(df[df['TIME'] == t[:14]+'00:00'][g])[0] if df['TIME'].astype(str).str.contains(t[:14]+'00:00').any() else 0, type)
 
 def _udf_by_ws():
     schema = StructType([
@@ -113,3 +113,5 @@ def save_list(lst, path):
     with open(path, 'w+') as f:
         for i in lst:
             f.write("%s\n" % i) 
+
+

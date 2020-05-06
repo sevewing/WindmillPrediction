@@ -1,0 +1,5 @@
+data/
+.vscode/
+__pycache__/
+spark-warehouse/
+.DS_Store/
