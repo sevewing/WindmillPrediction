@@ -159,15 +159,13 @@ def normalize_zcenter(df):
     """
     return (df - df.mean()) / df.std()
 
-def normalize_maxmin(data, max=1, min=0):
+def normalize_maxmin(df, max=1, min=0):
     """
     Normalize the data to real values(from new max 0 to new min 1).
     """
-    return (data - data.min()) / (data.max() - data.min()) * (max - min) + min
+    return (df - df.min()) / (df.max() - df.min()) * (max - min) + min
 
 def save_list(lst, path):
     with open(path, 'w+') as f:
         for i in lst:
             f.write("%s\n" % i) 
-
-
