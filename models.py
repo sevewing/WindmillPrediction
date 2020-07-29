@@ -1,21 +1,22 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-from myplot import timelines_plot
-
 from sklearn.metrics import r2_score
 from sklearn.model_selection import TimeSeriesSplit
 
+from constant import model_path, error_path
 
-class MLP(nn.Module):
 
-  def __init__(self, input_size, hidden_size, output_size):
-    super(MLP, self).__init__()
+class MLP_Regression(nn.Module):
+
+  def __init__(self, input_size, hidden_size):
+    super(MLP_Regression, self).__init__()
     self.fc1 = nn.Linear(input_size, hidden_size)
     self.fc2 = nn.Linear(hidden_size, hidden_size)
-    self.fc3 = nn.Linear(hidden_size, output_size)
+    self.fc3 = nn.Linear(hidden_size, 1)
     self.d = nn.Dropout(p=0.5)
 
   def forward(self, x):
@@ -109,7 +110,7 @@ def train_model(
                 print(f'Epoch {t} train loss: {loss.item()} test loss: {test_loss.item()}')
 
         elif t % 10 == 0:
-            print(f'Epoch {t+1} train loss: {loss.item()}')
+            print(f'Epoch {t} train loss: {loss.item()}')
 
         train_hist[t] = loss.item()
 
@@ -117,11 +118,11 @@ def train_model(
         loss.backward()
         optimiser.step()
 
-    return model.eval(), train_hist, test_hist
+    return model, train_hist, test_hist
 
 
 
-def timeseries_kfold_validation_training(df, features, target, n_groups, model, lr=0.001, num_epochs=30):
+def timeseries_kfold_validation_training(df, features, target, n_groups, model, lr=0.001, num_epochs=30, save_name=None):
     dtype = torch.float
     train_hists, test_hists = [], []
 
@@ -161,34 +162,53 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
         train_hists.extend(train_hist.tolist())
         test_hists.extend(test_hist.tolist())
 
-    return model, train_hists, test_hists
+    if save_name is not None:
+        torch.save(model, model_path+save_name)
+
+    return model.eval(), train_hists, test_hists
 
 
+def model_evaluation(df, features, model, save_name=None):
+    with torch.no_grad():
+        x_test_tensor = torch.tensor(df[features].values, dtype = torch.float)
+        y_pred_tensor = model(x_test_tensor)
+        df["pred"] = y_pred_tensor.detach().flatten().numpy() 
 
-def Evaluation(df, name):
-    df = df.reset_index(drop = True)
+    df = df.groupby("TIME_CET").agg({"VAERDI" : lambda x : x.sum(),
+                                        "pred" : lambda x : x.sum()})
+    df.columns = ["VAERDI", "pred"]
+    
+    df = df.reset_index()
+    # df = df.reset_index(drop = True)
     df = df.reset_index()
     df["index"] = df["index"] + 1
-
     df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
     df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum() / df["VAERDI_cumsum"]
     df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum() / df["VAERDI_cumsum"]
     df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])).cumsum() ** 2) / df["VAERDI_cumsum"]
     df["NRMSE"] = ((((abs(df["VAERDI"] - df["pred"])).cumsum() ** 2) * df["index"]) ** 0.5 ) / df["VAERDI_cumsum"] 
-    
-    # df[name+"_R^2"] = [r2_score(df["VAERDI"][:i+1], df["pred"][:i+1]) for i in range(len(df))]
+    df["accuracy"] = round((1 - abs(df["VAERDI"] - df["pred"] + 1) / (df["VAERDI"] + 1)),4) * 100
 
-    timelines_plot(df["TIME_CET"], 
-            {"NBIAS":df["NBIAS"], 
-            "NMAE":df["NMAE"],
-            "NMSE":df["NMSE"],
-            "NRMSE":df["NRMSE"]})
     df = df.drop(["index"], axis=1)
 
+    # df = df.groupby("TIME_CET").agg({"accuracy" : lambda x :round(x.mean(), 1),
+    #                                     "NBIAS" : lambda x :round(x.mean(), 1),
+    #                                     "NMAE" : lambda x :round(x.mean(), 1),
+    #                                     "NMSE" : lambda x :round(x.mean(), 1),
+    #                                     "NRMSE" : lambda x :round(x.mean(), 1),
+    #                                     "VAERDI" : lambda x :round(x.sum(), 1),
+    #                                     "pred" : lambda x :round(x.sum(), 1)})
+    # df.columns = ["accuracy", "NBIAS", "NMAE", "NMSE", "NRMSE", "VAERDI", "pred"]
+    # df = df.reset_index()
+    if save_name is not None:
+        df.to_csv(error_path + save_name, index=False)
+    
     return df
 
 
 def model_improvement(ref_error, target_error):
     I = 100 * (ref_error["NMAE"] - target_error["NMAE"]) / ref_error["NMAE"]
-    # R_2 = (ref_error["NMSE"] - target_error["NMSE"]) / ref_error["NMSE"]
-    return I
+
+    r2_ref = r2_score(ref_error["VAERDI"], ref_error["pred"])
+    r2_tar = r2_score(target_error["VAERDI"], target_error["pred"])
+    return I, {"r2_ref": r2_ref, "r2_tar": r2_tar}
