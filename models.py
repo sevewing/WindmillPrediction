@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -12,9 +13,10 @@ from constant import model_path, error_path
 
 class MLP_Regression(nn.Module):
 
-  def __init__(self, input_size, hidden_size):
+  def __init__(self, input_size, hidden_size, bias=0):
     super(MLP_Regression, self).__init__()
     self.fc1 = nn.Linear(input_size, hidden_size)
+    self.fc1.bias.data.fill_(bias)
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, 1)
     self.d = nn.Dropout(p=0.5)
@@ -168,47 +170,53 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
     return model.eval(), train_hists, test_hists
 
 
-def model_evaluation(df, features, model, save_name=None):
+def model_evaluation(df, features, model, ahead=None, save_name=None):
+    model.eval()
     with torch.no_grad():
         x_test_tensor = torch.tensor(df[features].values, dtype = torch.float)
         y_pred_tensor = model(x_test_tensor)
         df["pred"] = y_pred_tensor.detach().flatten().numpy() 
 
-    df = df.groupby("TIME_CET").agg({"VAERDI" : lambda x : x.sum(),
+    df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(),
                                         "pred" : lambda x : x.sum()})
-    df.columns = ["VAERDI", "pred"]
+    df.columns = ["TIME_CET", "VAERDI", "pred"]
     
-    df = df.reset_index()
-    # df = df.reset_index(drop = True)
+    if ahead:
+        df["pred"][0:len(df)-1] = df["pred"][ahead:len(df)]
+        df = df.drop(df.tail(1).index)  
+
     df = df.reset_index()
     df["index"] = df["index"] + 1
     df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
     df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum() / df["VAERDI_cumsum"]
     df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum() / df["VAERDI_cumsum"]
-    df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])).cumsum() ** 2) / df["VAERDI_cumsum"]
-    df["NRMSE"] = ((((abs(df["VAERDI"] - df["pred"])).cumsum() ** 2) * df["index"]) ** 0.5 ) / df["VAERDI_cumsum"] 
-    df["accuracy"] = round((1 - abs(df["VAERDI"] - df["pred"] + 1) / (df["VAERDI"] + 1)),4) * 100
+    df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum() / df["VAERDI_cumsum"]
+    df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum() / df["VAERDI_cumsum"]) ** 0.5 
+    # df["accuracy"] = round((1 - (abs(df["VAERDI"] - df["pred"]) + 1) / (df["VAERDI"] + 1)), 4) * 100
 
     df = df.drop(["index"], axis=1)
 
-    # df = df.groupby("TIME_CET").agg({"accuracy" : lambda x :round(x.mean(), 1),
-    #                                     "NBIAS" : lambda x :round(x.mean(), 1),
-    #                                     "NMAE" : lambda x :round(x.mean(), 1),
-    #                                     "NMSE" : lambda x :round(x.mean(), 1),
-    #                                     "NRMSE" : lambda x :round(x.mean(), 1),
-    #                                     "VAERDI" : lambda x :round(x.sum(), 1),
-    #                                     "pred" : lambda x :round(x.sum(), 1)})
-    # df.columns = ["accuracy", "NBIAS", "NMAE", "NMSE", "NRMSE", "VAERDI", "pred"]
-    # df = df.reset_index()
     if save_name is not None:
         df.to_csv(error_path + save_name, index=False)
     
     return df
 
 
-def model_improvement(ref_error, target_error):
-    I = 100 * (ref_error["NMAE"] - target_error["NMAE"]) / ref_error["NMAE"]
+def model_improvement(errors:dict):
+    """
+    Compare the improvements of models
+    """
+    Imp = {x:[] for x in errors.keys()}
+    r2 = {x:[] for x in errors.keys()}
+    
+    for ecname in errors.keys():
+        df = pd.DataFrame([], columns=[x for x in errors.keys() if x != ecname])
+        ecrefs = errors.copy()
+        ec = ecrefs.pop(ecname)
+        for ecrefname, ecref in ecrefs.items():
+            I = 100 * (ecref["NRMSE"] - ec["NRMSE"]) / ecref["NRMSE"]
+            df[ecrefname] = I
+        Imp[ecname] = df
 
-    r2_ref = r2_score(ref_error["VAERDI"], ref_error["pred"])
-    r2_tar = r2_score(target_error["VAERDI"], target_error["pred"])
-    return I, {"r2_ref": r2_ref, "r2_tar": r2_tar}
+        r2[ecname] = round(r2_score(ec["VAERDI"], ec["pred"]), 3)
+    return Imp, r2

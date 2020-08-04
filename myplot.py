@@ -15,16 +15,34 @@ def model_loss(train_test_hist, save_name=None):
         plt.savefig(plot_path + save_name, dpi=150)
 
 
-def timelines(time, ys, line=True, save_name=None):
+def timelines(time, ys, tp="line", figsize=(30,7), save_name=None):
     time = time.apply(str)
     time = time.apply(lambda x: x[-11:-6])
-    plt.figure(figsize=(30,7))
-    for label, th in ys.items():
-        plt.plot(time, th, label=label, marker='o', linewidth=2)
+    if tp=="line":
+        plt.figure(figsize=figsize)
+        for label, th in ys.items():
+            plt.plot(time, th, label=label, marker='o', linewidth=2)
+    elif tp=="scatter":
+        plt.figure(figsize=figsize)
+        for label, th in ys.items():
+            plt.scatter(time, th, label=label, marker='o')
+    plt.grid(True, axis='y')
     plt.legend()
     # plt.show()
     if save_name is not None:
         plt.savefig(plot_path + save_name, dpi=150)
+
+# def timelines(time, ys, line=True, save_name=None):
+#     time = time.apply(str)
+#     time = time.apply(lambda x: x[-11:-6])
+#     plt.figure(figsize=(20,7))
+#     plt.grid(True, axis='y')
+#     for label, th in ys.items():
+#         plt.plot(time, th, label=label, marker='o', linewidth=2)
+#     plt.legend()
+#     # plt.show()
+#     if save_name is not None:
+#         plt.savefig(plot_path + save_name, dpi=150)
 
 
 def ploynomial_quantile_windpower_curves(X, ys, scatterplt=[], boundary=[], degree=3):
