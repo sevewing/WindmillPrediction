@@ -5,9 +5,6 @@ import time
 from multiprocessing import  Pool
 
 from sklearn.preprocessing import LabelBinarizer
-# from sklearn.preprocessing import PolynomialFeatures
-# from sklearn.linear_model import Ridge
-# from sklearn.pipeline import make_pipeline
 from scipy.interpolate import interp1d
 
 from tools import pow_exponent, pow_law, rn_exponent
@@ -20,10 +17,16 @@ get_by_grid_wu100 = None
 get_by_grid_wv100 = None
 get_weather = lambda x, fun: fun(x["grid"], x["TIME_CET"])
 
-get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]))
-get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]))
-get_ws_hub_wsr_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["wsr_u"]))
-get_ws_hub_wsr_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["wsr_v"]))
+# get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]))
+# get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]))
+# get_ws_hub_wsr_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["wsr_u"]))
+# get_ws_hub_wsr_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["wsr_v"]))
+
+get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
+get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
+get_ws_hub_wsr_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], x["wsr_u"])
+get_ws_hub_wsr_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], x["wsr_v"])
+
 get_ws_by_uv = lambda u, v : (u ** 2 + v ** 2) ** 0.5
 get_ws_by_uv = lambda u, v : (u ** 2 + v ** 2) ** 0.5 
 

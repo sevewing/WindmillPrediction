@@ -4,45 +4,44 @@ from matplotlib import rcParams, cycler
 cmap = plt.cm.winter
 from constant import plot_path
 
+coldic = {"Original":"#394a6d", "Windshear":"#3c9d9b", "Geo":"#52de97", "Semigeo":"#9ACC8F", "Measured Power":"#DE5299"}
 
-def model_loss(train_test_hist, save_name=None):
+
+def model_loss(train_test_hist, path=None):
     plt.figure(figsize=(20,7))
     for label, th in train_test_hist.items():
         plt.plot(th, label=label)
+    plt.xlabel("Echos Times")
     plt.legend()
     # plt.show()
-    if save_name is not None:
-        plt.savefig(plot_path + save_name, dpi=150)
+    if path is not None:
+        plt.savefig(path, dpi=150)
 
 
-def timelines(time, ys, tp="line", figsize=(30,7), save_name=None):
+def timelines(time, ys, xlabel="", ylabel="", tp="line", figsize=(30,7), path=None):
     time = time.apply(str)
     time = time.apply(lambda x: x[-11:-6])
+    time_gap = [x for x in time if x[-2:]=='23']
+
     if tp=="line":
         plt.figure(figsize=figsize)
         for label, th in ys.items():
-            plt.plot(time, th, label=label, marker='o', linewidth=2)
+            plt.plot(time, th, label=label, marker='o', linewidth=2, color=coldic[label])
     elif tp=="scatter":
         plt.figure(figsize=figsize)
         for label, th in ys.items():
-            plt.scatter(time, th, label=label, marker='o')
+            plt.scatter(time, th, label=label, marker='o', color=coldic[label])
+    if len(time_gap) > 1:
+        for i in range(0, len(time_gap)-1):    
+            plt.axvline(x=time_gap[i], color='gray', linestyle='--')
+    plt.xticks(rotation=75)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     plt.grid(True, axis='y')
     plt.legend()
     # plt.show()
-    if save_name is not None:
-        plt.savefig(plot_path + save_name, dpi=150)
-
-# def timelines(time, ys, line=True, save_name=None):
-#     time = time.apply(str)
-#     time = time.apply(lambda x: x[-11:-6])
-#     plt.figure(figsize=(20,7))
-#     plt.grid(True, axis='y')
-#     for label, th in ys.items():
-#         plt.plot(time, th, label=label, marker='o', linewidth=2)
-#     plt.legend()
-#     # plt.show()
-#     if save_name is not None:
-#         plt.savefig(plot_path + save_name, dpi=150)
+    if path is not None:
+        plt.savefig(path, dpi=150)
 
 
 def ploynomial_quantile_windpower_curves(X, ys, scatterplt=[], boundary=[], degree=3):
@@ -131,3 +130,15 @@ def geo_precentage(df, features, save=True):
     # plt.show()
     if save:
         plt.savefig(plot_path + "geo_precentage.png", dpi=150)
+
+
+def k_fold_validation(n_groups, k_scores, path=None):
+    k_range = range(1, n_groups) 
+    plt.figure(figsize=(10, 7))
+    plt.plot(k_range, k_scores, marker='o')  
+    plt.xticks(k_range)
+    plt.xlabel('Value of K')
+    plt.ylabel('Cross-Validated SmoothL1Loss')  
+    plt.show()
+    if path is not None:
+        plt.savefig(path, dpi=150)

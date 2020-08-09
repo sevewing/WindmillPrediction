@@ -20,7 +20,7 @@ def to_vector(s, d):
 
 
 pow_law = lambda v, z, z_hat, a : v * ( (z_hat/z) ** a)
-rn_exponent = lambda rn : 0.096 * np.log10(rn) + 0.016 * np.log10(rn) ** 2 + 0.24
+# rn_exponent = lambda rn : 0.096 * np.log10(rn) + 0.016 * np.log10(rn) ** 2 + 0.24
 def pow_exponent(v1, v2, z1, z2):
     """
     Calaulate windshear in reverse by two layers

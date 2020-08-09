@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import time
 
 import torch
 import torch.nn as nn
@@ -84,7 +85,8 @@ def train_model(
     X_train, 
     y_train, 
     X_test=None, 
-    y_test=None
+    y_test=None,
+    path=None
     ):
     loss_fn = torch.nn.SmoothL1Loss()
 
@@ -96,7 +98,6 @@ def train_model(
 
     for t in range(num_epochs):
         if model is LSTM_Regression:
-            print("passssss")
             model.reset_hidden_state()
  
         y_pred = model(X_train)
@@ -120,13 +121,19 @@ def train_model(
         loss.backward()
         optimiser.step()
 
-    return model, train_hist, test_hist
+    if path is not None:
+        torch.save(model, path)
+
+    return model.eval(), train_hist, test_hist
 
 
 
-def timeseries_kfold_validation_training(df, features, target, n_groups, model, lr=0.001, num_epochs=30, save_name=None):
+def timeseries_kfold_validation_training(df, features, target, n_groups, model, lr=0.001, num_epochs=30):
+    st = time.time()
+
     dtype = torch.float
-    train_hists, test_hists = [], []
+    # train_hists, test_hists = [], []
+    k_scores = [] 
 
     start = df["TIME_CET"].min()
     end = df["TIME_CET"].max()
@@ -137,7 +144,7 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
         end = pivot + gap
         if i == n_groups-1:
             end = df["TIME_CET"].max()
-        train_index = df[df["TIME_CET"] <= pivot].index
+        train_index = (df[df["TIME_CET"] <= pivot].index).append(df[df["TIME_CET"] > end].index)
         test_index = df[df["TIME_CET"] > pivot][df["TIME_CET"] <= end].index
 
         train = df.iloc[train_index]
@@ -151,8 +158,7 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
         x_test_tensor = torch.tensor(x_test, dtype = dtype)
         y_test_tensor = torch.tensor(y_test, dtype = dtype)
 
-        model, train_hist, test_hist = train_model(
-                                        model, 
+        _, _, test_hist = train_model(model, 
                                         lr,
                                         num_epochs,
                                         x_train_tensor, 
@@ -161,43 +167,66 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
                                         y_test_tensor
                                         )
         
-        train_hists.extend(train_hist.tolist())
-        test_hists.extend(test_hist.tolist())
+        # train_hists.extend(train_hist.tolist())
+        # test_hists.extend(test_hist.tolist())
+        
+        k_scores.append(np.mean(test_hist.tolist()))
 
-    if save_name is not None:
-        torch.save(model, model_path+save_name)
+    et = time.time()
+    print("NN k-fold-validation time: ", et - st)
 
-    return model.eval(), train_hists, test_hists
+    return k_scores
 
 
-def model_evaluation(df, features, model, ahead=None, save_name=None):
+
+def model_evaluation(dfevl, features, model, ahead=None, path=None):
+    df = dfevl.copy()
     model.eval()
     with torch.no_grad():
         x_test_tensor = torch.tensor(df[features].values, dtype = torch.float)
         y_pred_tensor = model(x_test_tensor)
         df["pred"] = y_pred_tensor.detach().flatten().numpy() 
 
-    df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(),
-                                        "pred" : lambda x : x.sum()})
+
+    max_VAERDI = df["max_VAERDI"][0]
+
+    # Convert to megawatt (A megawatt hour (Mwh) is equal to 1,000 Kilowatt hours (Kwh))
+    df["pred"] = df["pred"] * max_VAERDI / 1000
+    df["VAERDI"] = df["VAERDI"] * max_VAERDI / 1000
+
+    df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
     df.columns = ["TIME_CET", "VAERDI", "pred"]
     
     if ahead:
         df["pred"][0:len(df)-1] = df["pred"][ahead:len(df)]
-        df = df.drop(df.tail(1).index)  
+        df = df.drop(df.tail(1).index)
 
     df = df.reset_index()
-    df["index"] = df["index"] + 1
+
+
     df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
-    df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum() / df["VAERDI_cumsum"]
-    df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum() / df["VAERDI_cumsum"]
-    df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum() / df["VAERDI_cumsum"]
-    df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum() / df["VAERDI_cumsum"]) ** 0.5 
+    df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI_cumsum"]
+    df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI_cumsum"]
+    df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI_cumsum"]
+    df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI_cumsum"] )** 0.5
+
+    df["NBIAS_CUM"] = df["NBIAS"].cumsum()
+    df["NMAE_CUM"] = df["NMAE"].cumsum()
+    df["NMSE_CUM"] = df["NMSE"].cumsum()
+    df["NRMSE_CUM"] = df["NRMSE"].cumsum()
+
+    # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
+    # df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()
+    # df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()
+    # df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()
+    # df["NRMSE"] = df["NMSE"] ** 0.5 
+
     # df["accuracy"] = round((1 - (abs(df["VAERDI"] - df["pred"]) + 1) / (df["VAERDI"] + 1)), 4) * 100
 
-    df = df.drop(["index"], axis=1)
-
-    if save_name is not None:
-        df.to_csv(error_path + save_name, index=False)
+    # df["pred"] = df["pred"] * max_VAERDI
+    # df["VAERDI"] = df["VAERDI"] * max_VAERDI
+    if path is not None:
+        df.to_csv(path, index=False)
     
     return df
 
@@ -214,7 +243,7 @@ def model_improvement(errors:dict):
         ecrefs = errors.copy()
         ec = ecrefs.pop(ecname)
         for ecrefname, ecref in ecrefs.items():
-            I = 100 * (ecref["NRMSE"] - ec["NRMSE"]) / ecref["NRMSE"]
+            I = 100 * (ecref["NRMSE"] - ec["NRMSE"]+1) / (ecref["NRMSE"]+1)
             df[ecrefname] = I
         Imp[ecname] = df
 

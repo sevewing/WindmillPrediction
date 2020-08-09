@@ -23,14 +23,14 @@ windmill_SH_SC_path = "./data/windmill_SH_SC.csv"
 windmill_PL_SC_path = "./data/windmill_PL_SC.csv"
 windmill_PH_SC_path = "./data/windmill_PH_SC.csv"
 
-SL_SC_TRAIN_path = "./traintestdata/SL_SC_TRAIN.csv"
-SL_SC_EVL_path = "./traintestdata/SL_SC_EVL.csv"
-SH_SC_TRAIN_path = "./traintestdata/SH_SC_TRAIN.csv"
-SH_SC_EVL_path = "./traintestdata/SH_SC_EVL.csv"
-PL_SC_TRAIN_path = "./traintestdata/PL_SC_TRAIN.csv"
-PL_SC_EVL_path = "./traintestdata/PL_SC_EVL.csv"
-PH_SC_TRAIN_path = "./traintestdata/PH_SC_TRAIN.csv"
-PH_SC_EVL_path = "./traintestdata/PH_SC_EVL.csv"
+SL_SC_TRAIN_path = "./traintestdata/SL_SC_TRAIN.parquet"
+SL_SC_EVL_path = "./traintestdata/SL_SC_EVL.parquet"
+SH_SC_TRAIN_path = "./traintestdata/SH_SC_TRAIN.parquet"
+SH_SC_EVL_path = "./traintestdata/SH_SC_EVL.parquet"
+PL_SC_TRAIN_path = "./traintestdata/PL_SC_TRAIN.parquet"
+PL_SC_EVL_path = "./traintestdata/PL_SC_EVL.parquet"
+PH_SC_TRAIN_path = "./traintestdata/PH_SC_TRAIN.parquet"
+PH_SC_EVL_path = "./traintestdata/PH_SC_EVL.parquet"
 
 settlement_path = "./data/ITU_DATA/settlement/201{8,9}_cleaned.parquet"
 settlement_2018_path = "./data/ITU_DATA/settlement/2018_cleaned.parquet"
@@ -59,6 +59,29 @@ tmp100_path = "./data/ITU_DATA/prognosis/ENetNEA/tmp_100m_cmp.parquet"
 error_path = "./result/errors/"
 model_path = "./result/model/"
 plot_path = "./result/plot/"
+
+
+org_cols = ['Capacity_kw', 'Navhub_height', 'Rotor_diameter', 
+'wu10', 'wv10', 'wu100', 'wv100', 'tmp2', 'tmp100',
+'m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
+'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
+wsr_cols = ['Capacity_kw','Rotor_diameter',
+'hws_u_wsr','hws_v_wsr','hws_uv_wsr','hws_uv_wsr^2','hws_uv_wsr^3','htmp_exp',
+'hws_uv_wsr_q0.1','hws_uv_wsr_q0.5','hws_uv_wsr_q0.9',
+'m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
+'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
+geo_cols = ['Capacity_kw', 'Rotor_diameter',
+'Slope', 'Aspect', 
+'hws_u_rn','hws_v_rn','hws_uv_rn','hws_uv_rn^2','hws_uv_rn^3','htmp_exp', 
+'hws_uv_rn_q0.1','hws_uv_rn_q0.5','hws_uv_rn_q0.9',
+'m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
+'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
+semigeo_cols = ['Capacity_kw', 'Rotor_diameter',
+'Slope', 'Aspect', 'Roughness',
+'hws_u_wsr','hws_v_wsr','hws_uv_wsr','hws_uv_wsr^2','hws_uv_wsr^3','htmp_exp', 
+'hws_uv_wsr_q0.1','hws_uv_wsr_q0.5','hws_uv_wsr_q0.9',
+'m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
+'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
 
 
 # settlement_schema = StructType([
