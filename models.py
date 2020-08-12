@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import r2_score
-from sklearn.model_selection import TimeSeriesSplit
+# from sklearn.model_selection import TimeSeriesSplit
 
 from constant import model_path, error_path
 
@@ -178,6 +178,46 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
     return k_scores
 
 
+def train_test_validation(df, features, model, lr=0.001, num_epochs=30):
+    st = time.time()
+
+    dtype = torch.float
+    train_hists, test_hists = [], []
+
+    days = np.unique(df_train["TIME_CET"].astype(str).apply(lambda x: x[:10])).sample(frac=0.8, random_state=1)
+    
+    train_index = df[df["TIME_CET"].isin(days)].index
+    test_index = df[~df["TIME_CET"].isin(days)].index
+
+    train = df.iloc[train_index]
+    test = df.iloc[test_index]
+    
+    x_train, y_train = train[features].values, train["VAREDI"].values
+    x_test, y_test = test[features].values, test["VAERDI"].values
+
+    x_train_tensor = torch.tensor(x_train, dtype = dtype)
+    y_train_tensor = torch.tensor(y_train, dtype = dtype)
+    x_test_tensor = torch.tensor(x_test, dtype = dtype)
+    y_test_tensor = torch.tensor(y_test, dtype = dtype)
+
+    _, _, test_hist = train_model(model, 
+                                    lr,
+                                    num_epochs,
+                                    x_train_tensor, 
+                                    y_train_tensor, 
+                                    x_test_tensor, 
+                                    y_test_tensor
+                                    )
+        
+    train_hists.extend(train_hist.tolist())
+    test_hists.extend(test_hist.tolist())
+        
+    et = time.time()
+    print("NN k-fold-validation time: ", et - st)
+
+    return train_hists, test_hists
+
+
 
 def model_evaluation(dfevl, features, model, ahead=None, path=None):
     df = dfevl.copy()
@@ -198,17 +238,22 @@ def model_evaluation(dfevl, features, model, ahead=None, path=None):
     df.columns = ["TIME_CET", "VAERDI", "pred"]
     
     if ahead:
-        df["pred"][0:len(df)-1] = df["pred"][ahead:len(df)]
+        df["pred"][ahead:len(df)] = df["pred"][0:len(df)-1]
         df = df.drop(df.tail(1).index)
 
     df = df.reset_index()
 
-
-    df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
+    df["VAERDI_cumsum"] = df["VAERDI"].sum()
     df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI_cumsum"]
     df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI_cumsum"]
     df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI_cumsum"]
     df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI_cumsum"] )** 0.5
+
+    # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
+    df["NBIAS_IDV"] = (df["VAERDI"] - df["pred"])/ df["VAERDI"]
+    df["NMAE_IDV"] = (abs(df["VAERDI"] - df["pred"])) + 1/ (df["VAERDI"] + 1)
+    df["NMSE_IDV"] = (((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1)
+    df["NRMSE_IDV"] = ((((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1) )** 0.5
 
     df["NBIAS_CUM"] = df["NBIAS"].cumsum()
     df["NMAE_CUM"] = df["NMAE"].cumsum()
@@ -243,7 +288,7 @@ def model_improvement(errors:dict):
         ecrefs = errors.copy()
         ec = ecrefs.pop(ecname)
         for ecrefname, ecref in ecrefs.items():
-            I = 100 * (ecref["NRMSE"] - ec["NRMSE"]+1) / (ecref["NRMSE"]+1)
+            I = 100 * (ecref["NRMSE_IDV"] - ec["NRMSE_IDV"]) / (ecref["NRMSE_IDV"])
             df[ecrefname] = I
         Imp[ecname] = df
 

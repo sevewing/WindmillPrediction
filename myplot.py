@@ -15,7 +15,7 @@ def model_loss(train_test_hist, path=None):
     plt.legend()
     # plt.show()
     if path is not None:
-        plt.savefig(path, dpi=150)
+        plt.savefig(path, dpi=150, bbox_inches='tight')
 
 
 def timelines(time, ys, xlabel="", ylabel="", tp="line", figsize=(30,7), path=None):
@@ -41,7 +41,7 @@ def timelines(time, ys, xlabel="", ylabel="", tp="line", figsize=(30,7), path=No
     plt.legend()
     # plt.show()
     if path is not None:
-        plt.savefig(path, dpi=150)
+        plt.savefig(path, dpi=150, bbox_inches='tight')
 
 
 def ploynomial_quantile_windpower_curves(X, ys, scatterplt=[], boundary=[], degree=3):
@@ -101,9 +101,9 @@ def wind_power_scatter(df_1_wsr,df_1_rn,df_2_wsr,df_2_rn, feature, xlim):
     axs[1, 1].set_ylabel("Generation Power (kw)")
 
 
-def geo_precentage(df, features, save=True):
+def geo_precentage(df, features, path=None):
     labels = df.index.to_list()
-    data = df[features].values
+    data = df[features].values 
     data_cum = data.cumsum(axis=1)
     category_colors = plt.get_cmap('RdYlGn')(
         np.linspace(0.15, 0.85, len(features)))
@@ -125,11 +125,32 @@ def geo_precentage(df, features, save=True):
         for y, (x, c) in enumerate(zip(xcenters, widths)):
             ax.text(x, y, str(int(c))+"%", ha='center', va='center',
                     color=text_color, fontsize=13)
-    ax.legend(ncol=len(features), bbox_to_anchor=(0, 1),
+    
+    ncol = len(features) if len(features) <= 10 else len(features)//2+1
+    ax.legend(ncol=ncol, bbox_to_anchor=(0, 1),
               loc='lower left', fontsize=11)
     # plt.show()
-    if save:
-        plt.savefig(plot_path + "geo_precentage.png", dpi=150)
+    if path is not None:
+        plt.savefig(path, dpi=150, bbox_inches='tight')
+
+
+def roughness_simulation(ls, h_range, path=None):
+    plt.figure(figsize=(10, 10))
+    plt.xlim(0, 10.5)
+    plt.ylim(0, 110)
+    x_new = np.linspace(0,11,100)
+    for rn, ws in ls.iterrows():
+        if rn == 0.5 or rn == 0.05:
+            plt.plot(ws, h_range, label='{:f}'.format(rn).rstrip('0'), linewidth=4)
+        else:
+            plt.plot(ws, h_range, label='{:f}'.format(rn).rstrip('0'))
+    plt.axvline(x=6, color='gray', linestyle='--')
+    plt.xlabel("Wind Speed (m/s)")
+    plt.ylabel("AGL (m)")
+    plt.legend(loc="upper left")
+    # plt.show()
+    if path is not None:
+        plt.savefig(path, dpi=150, bbox_inches='tight')
 
 
 def k_fold_validation(n_groups, k_scores, path=None):
@@ -139,6 +160,6 @@ def k_fold_validation(n_groups, k_scores, path=None):
     plt.xticks(k_range)
     plt.xlabel('Value of K')
     plt.ylabel('Cross-Validated SmoothL1Loss')  
-    plt.show()
+    # plt.show()
     if path is not None:
-        plt.savefig(path, dpi=150)
+        plt.savefig(path, dpi=150, bbox_inches='tight')
