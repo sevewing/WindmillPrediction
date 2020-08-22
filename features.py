@@ -7,7 +7,7 @@ from multiprocessing import  Pool
 from sklearn.preprocessing import LabelBinarizer
 from scipy.interpolate import interp1d
 
-from tools import pow_exponent, pow_law, rn_exponent
+from tools import pow_exponent, pow_law, log_law,rn_exponent, thermal_interpolation
 
 
 get_ahead = None
@@ -17,8 +17,12 @@ get_by_grid_wu100 = None
 get_by_grid_wv100 = None
 get_weather = lambda x, fun: fun(x["grid"], x["TIME_CET"])
 
-get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
-get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
+get_ws_hub_pow_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
+get_ws_hub_pow_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
+
+
+# get_ws_hub_log_r_u = lambda x :log_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
+# get_ws_hub_log_r_v = lambda x :log_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
 
 # get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
 # get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
@@ -31,8 +35,7 @@ get_ws_by_uv = lambda u, v : (u ** 2 + v ** 2) ** 0.5
 
 get_by_grid_tmp2 = None
 get_by_grid_tmp100 = None
-get_tmp_hub = lambda x :pow_law(x["tmp2"], 2, x["Navhub_height"], x["exp_tmp"])
-
+get_tmp_hub = lambda x :thermal_interpolation(x["tmp2"], x["tmp100"], 2, 100,  x["Navhub_height"])
 
 def get_by_grid(df, g, t):
     """
@@ -100,15 +103,26 @@ def _extract_basic(df):
     return df
 
 
-def _extract_rn_intep(df):
+def _extract_pow_rn_intep(df):
     """
     Extract Roughness based interpolation
     """
-    df["hws_u_rn"] = df.apply(lambda x: get_ws_hub_r_u(x), axis=1)
-    df["hws_v_rn"] = df.apply(lambda x: get_ws_hub_r_v(x), axis=1)
-    df["hws_uv_rn"] = df.apply(lambda x: get_ws_by_uv(x["hws_u_rn"], x["hws_v_rn"]), axis=1)
-    df["hws_uv_rn^2"] = df.apply(lambda x: x["hws_uv_rn"] ** 2 , axis=1)
-    df["hws_uv_rn^3"] = df.apply(lambda x: x["hws_uv_rn"] ** 3 , axis=1)
+    df["hws_u_pow_rn"] = df.apply(lambda x: get_ws_hub_pow_r_u(x), axis=1)
+    df["hws_v_pow_rn"] = df.apply(lambda x: get_ws_hub_pow_r_v(x), axis=1)
+    df["hws_uv_pow_rn"] = df.apply(lambda x: get_ws_by_uv(x["hws_u_pow_rn"], x["hws_v_pow_rn"]), axis=1)
+    df["hws_uv_pow_rn^2"] = df.apply(lambda x: x["hws_uv_pow_rn"] ** 2 , axis=1)
+    df["hws_uv_pow_rn^3"] = df.apply(lambda x: x["hws_uv_pow_rn"] ** 3 , axis=1)
+    return df
+
+def _extract_log_rn_intep(df):
+    """
+    Extract Roughness based interpolation
+    """
+    df["hws_u_log_rn"] = df.apply(lambda x: get_ws_hub_log_r_u(x), axis=1)
+    df["hws_v_log_rn"] = df.apply(lambda x: get_ws_hub_log_r_v(x), axis=1)
+    df["hws_uv_log_rn"] = df.apply(lambda x: get_ws_by_uv(x["hws_u_log_rn"], x["hws_v_log_rn"]), axis=1)
+    df["hws_uv_log_rn^2"] = df.apply(lambda x: x["hws_uv_log_rn"] ** 2 , axis=1)
+    df["hws_uv_log_rn^3"] = df.apply(lambda x: x["hws_uv_log_rn"] ** 3 , axis=1)
     return df
 
 def _extract_wsr_intep(df):
@@ -129,8 +143,8 @@ def _extract_tmp_intep(df):
     Extract Temperature
     """
     
-    df["exp_tmp"] = df.apply(lambda x: pow_exponent(x["tmp2"], x["tmp100"], 2, 100), axis=1)
-    df["htmp_exp"] = df.apply(lambda x: get_tmp_hub(x), axis=1)
+    # df["exp_tmp"] = df.apply(lambda x: pow_exponent(x["tmp2"], x["tmp100"], 2, 100), axis=1)
+    df["htmp_inp"] = df.apply(lambda x: get_tmp_hub(x), axis=1)
     return df
 
 def _extract_time(df):
@@ -186,7 +200,8 @@ def extract(df):
     """
     df = _extract_basic(df)
     df = _extract_wsr_intep(df)
-    df = _extract_rn_intep(df)
+    df = _extract_pow_rn_intep(df)
+    df = _extract_log_rn_intep(df)
     df = _extract_tmp_intep(df)
     df = _extract_time(df)
 

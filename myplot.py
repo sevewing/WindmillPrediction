@@ -18,10 +18,11 @@ def model_loss(train_test_hist, path=None):
         plt.savefig(path, dpi=150, bbox_inches='tight')
 
 
-def timelines(time, ys, xlabel="", ylabel="", tp="line", figsize=(30,7), path=None):
-    time = time.apply(str)
-    time = time.apply(lambda x: x[-11:-6])
-    time_gap = [x for x in time if x[-2:]=='23']
+def timelines(time, ys, xlabel="", ylabel="", tp="line", fulltime=True, figsize=(30,7), path=None):
+    if fulltime:
+        time = time.apply(str)
+        time = time.apply(lambda x: x[-11:-6])
+        time_gap = [x for x in time if x[-2:]=='23']
 
     if tp=="line":
         plt.figure(figsize=figsize)
@@ -31,7 +32,7 @@ def timelines(time, ys, xlabel="", ylabel="", tp="line", figsize=(30,7), path=No
         plt.figure(figsize=figsize)
         for label, th in ys.items():
             plt.scatter(time, th, label=label, marker='o', color=coldic[label])
-    if len(time_gap) > 1:
+    if fulltime and len(time_gap) > 1:
         for i in range(0, len(time_gap)-1):    
             plt.axvline(x=time_gap[i], color='gray', linestyle='--')
     plt.xticks(rotation=75)

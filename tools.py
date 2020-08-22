@@ -18,9 +18,12 @@ def to_vector(s, d):
     v = s * sin(pi/180 * (270-d))
     return u, v
 
-
+# thermal_gradient  = lambda v, z, z_hat, a : (t2-t1)/(z2-z1) y x
+thermal_interpolation = lambda t1, t2, z1, z2, z_hat : (z_hat - z1) * (t2 - t1)  / (z2 - z1) + t1
 pow_law = lambda v, z, z_hat, a : v * ( (z_hat/z) ** a)
+log_law = lambda v, z, z_hat, rl : v * np.log(z_hat/rl) / np.log(z/rl)
 rn_exponent = lambda rn : 0.096 * np.log10(rn) + 0.016 * np.log10(rn) ** 2 + 0.24
+
 def pow_exponent(v1, v2, z1, z2):
     """
     Calaulate windshear in reverse by two layers
@@ -189,11 +192,20 @@ def normalize_maxmin(df, max=1, min=0):
     """
     return (df - df.min()) / (df.max() - df.min()) * (max - min) + min
 
+# def normalize_features(df, features):
+#     """
+#     Normalize features by maxmin, normalize power["VAERDI"] by 'max_VAERDI'
+#     """
+#     df[features] = normalize_maxmin(df[features])
+#     df['VAERDI'] = df['VAERDI'] / df['max_VAERDI'] 
+#     df = df.fillna(0)
+#     return df
+
 def normalize_features(df, features):
     """
     Normalize features by maxmin, normalize power["VAERDI"] by 'max_VAERDI'
     """
-    df[features] = normalize_maxmin(df[features])
+    df[features] = normalize_zcenter(df[features])
     df['VAERDI'] = df['VAERDI'] / df['max_VAERDI'] 
     df = df.fillna(0)
     return df

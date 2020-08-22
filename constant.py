@@ -18,6 +18,10 @@
 windmill_path = "./data/windmill_cleaned.csv"
 windmill_park_path = "./data/windmill_park_cleaned.csv"
 # windmill_geo_analysis_path = "data/windmill_for_geoanalysis.csv"
+windmill_SL_path = "./data/windmill_SL.csv"
+# windmill_SL_path = "./data/windmill_SL_SC.csv"
+# windmill_SL_path = "./data/windmill_SL_SC.csv"
+# windmill_SL_path = "./data/windmill_SL_SC.csv"
 windmill_SL_SC_path = "./data/windmill_SL_SC.csv"
 windmill_SH_SC_path = "./data/windmill_SH_SC.csv"
 windmill_PL_SC_path = "./data/windmill_PL_SC.csv"
@@ -25,6 +29,9 @@ windmill_PH_SC_path = "./data/windmill_PH_SC.csv"
 
 SL_SC_TRAIN_path = "./traintestdata/SL_SC_TRAIN.parquet"
 SL_SC_EVL_path = "./traintestdata/SL_SC_EVL.parquet"
+# SL_SC_TRAIN_B_path = "./traintestdata/SL_SC_TRAIN_B.parquet"
+# SL_SC_EVL_B_path = "./traintestdata/SL_SC_EVL_B.parquet"
+
 SH_SC_TRAIN_path = "./traintestdata/SH_SC_TRAIN.parquet"
 SH_SC_EVL_path = "./traintestdata/SH_SC_EVL.parquet"
 PL_SC_TRAIN_path = "./traintestdata/PL_SC_TRAIN.parquet"
@@ -66,20 +73,22 @@ org_cols = ['Capacity_kw', 'Navhub_height', 'Rotor_diameter',
 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
 'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
 wsr_cols = ['Capacity_kw','Rotor_diameter',
-'hws_u_wsr','hws_v_wsr','hws_uv_wsr','hws_uv_wsr^2','hws_uv_wsr^3','htmp_exp',
-'hws_uv_wsr_q0.1','hws_uv_wsr_q0.5','hws_uv_wsr_q0.9',
+'hws_u_wsr','hws_v_wsr','hws_uv_wsr','hws_uv_wsr^2','hws_uv_wsr^3','htmp_inp',
 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
 'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
-geo_cols = ['Capacity_kw', 'Rotor_diameter',
+geo_pow_cols = ['Capacity_kw', 'Rotor_diameter',
 'Slope', 'Aspect', 
-'hws_u_rn','hws_v_rn','hws_uv_rn','hws_uv_rn^2','hws_uv_rn^3','htmp_exp', 
-'hws_uv_rn_q0.1','hws_uv_rn_q0.5','hws_uv_rn_q0.9',
+'hws_u_pow_rn','hws_v_pow_rn','hws_uv_pow_rn','hws_uv_pow_rn^2','hws_uv_pow_rn^3','htmp_inp', 
+'m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
+'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
+geo_log_cols = ['Capacity_kw', 'Rotor_diameter',
+'Slope', 'Aspect', 
+'hws_u_log_rn','hws_v_log_rn','hws_uv_log_rn','hws_uv_log_rn^2','hws_uv_log_rn^3','htmp_inp', 
 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
 'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
 semigeo_cols = ['Capacity_kw', 'Rotor_diameter',
 'Slope', 'Aspect', 'Roughness',
-'hws_u_wsr','hws_v_wsr','hws_uv_wsr','hws_uv_wsr^2','hws_uv_wsr^3','htmp_exp', 
-'hws_uv_wsr_q0.1','hws_uv_wsr_q0.5','hws_uv_wsr_q0.9',
+'hws_u_wsr','hws_v_wsr','hws_uv_wsr','hws_uv_wsr^2','hws_uv_wsr^3','htmp_inp', 
 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
 'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
 

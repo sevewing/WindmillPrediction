@@ -14,18 +14,19 @@ from constant import model_path, error_path
 
 class MLP_Regression(nn.Module):
 
-  def __init__(self, input_size, hidden_size, bias=0):
+  def __init__(self, input_size, hidden_size, f_active, bias=0):
     super(MLP_Regression, self).__init__()
     self.fc1 = nn.Linear(input_size, hidden_size)
     self.fc1.bias.data.fill_(bias)
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, 1)
     self.d = nn.Dropout(p=0.5)
+    self.f_active = f_active
 
   def forward(self, x):
-    x = F.leaky_relu(self.fc1(x))
-    # x = F.relu(self.fc2(x))
-    x = F.relu(self.fc3(x))
+    x = self.f_active(self.fc1(x))
+    # x = self.f_active(self.fc2(x))
+    x = self.fc3(x)
 
     return x
 
@@ -184,7 +185,8 @@ def train_test_validation(df, features, model, lr=0.001, num_epochs=30):
     dtype = torch.float
     train_hists, test_hists = [], []
 
-    days = np.unique(df_train["TIME_CET"].astype(str).apply(lambda x: x[:10])).sample(frac=0.8, random_state=1)
+    days = np.unique(df["TIME_CET"].astype(str).apply(lambda x: x[:10]))
+    days = np.random.choice(days, int(len(days)*0.8))
     
     train_index = df[df["TIME_CET"].isin(days)].index
     test_index = df[~df["TIME_CET"].isin(days)].index
@@ -192,7 +194,7 @@ def train_test_validation(df, features, model, lr=0.001, num_epochs=30):
     train = df.iloc[train_index]
     test = df.iloc[test_index]
     
-    x_train, y_train = train[features].values, train["VAREDI"].values
+    x_train, y_train = train[features].values, train["VAERDI"].values
     x_test, y_test = test[features].values, test["VAERDI"].values
 
     x_train_tensor = torch.tensor(x_train, dtype = dtype)
@@ -217,9 +219,7 @@ def train_test_validation(df, features, model, lr=0.001, num_epochs=30):
 
     return train_hists, test_hists
 
-
-
-def model_evaluation(dfevl, features, model, ahead=None, path=None):
+def model_evaluation(dfevl, features, model, days=True, ahead=None, path=None):
     df = dfevl.copy()
     model.eval()
     with torch.no_grad():
@@ -233,50 +233,106 @@ def model_evaluation(dfevl, features, model, ahead=None, path=None):
     # Convert to megawatt (A megawatt hour (Mwh) is equal to 1,000 Kilowatt hours (Kwh))
     df["pred"] = df["pred"] * max_VAERDI / 1000
     df["VAERDI"] = df["VAERDI"] * max_VAERDI / 1000
-
-    df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
-    df.columns = ["TIME_CET", "VAERDI", "pred"]
+    df["TIME_CET"] = df["TIME_CET"].astype(str)
+    if days:
+        df["TIME_CET"] = df["TIME_CET"].apply(lambda x :x[5:10])
+    df = df.groupby("TIME_CET").agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
+    df.columns = ["VAERDI", "pred"]
     
     if ahead:
         df["pred"][ahead:len(df)] = df["pred"][0:len(df)-1]
         df = df.drop(df.tail(1).index)
 
-    df = df.reset_index()
-
-    df["VAERDI_cumsum"] = df["VAERDI"].sum()
-    df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI_cumsum"]
-    df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI_cumsum"]
-    df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI_cumsum"]
-    df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI_cumsum"] )** 0.5
+    # df["VAERDI"] = df["VAERDI"].sum()
+    # df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI"].cumsum()
+    df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI"].cumsum()
+    df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum()
+    df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum() )** 0.5
 
     # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
-    df["NBIAS_IDV"] = (df["VAERDI"] - df["pred"])/ df["VAERDI"]
-    df["NMAE_IDV"] = (abs(df["VAERDI"] - df["pred"])) + 1/ (df["VAERDI"] + 1)
-    df["NMSE_IDV"] = (((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1)
-    df["NRMSE_IDV"] = ((((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1) )** 0.5
+    # df["BIAS_IDV"] = (df["VAERDI"] - df["pred"])/ df["VAERDI"]
+    # df["MAE_IDV"] = (abs(df["VAERDI"] - df["pred"])) + 1/ (df["VAERDI"] + 1)
+    # df["MSE_IDV"] = (((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1)
+    # df["RMSE_IDV"] = ((((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1) )** 0.5
 
-    df["NBIAS_CUM"] = df["NBIAS"].cumsum()
-    df["NMAE_CUM"] = df["NMAE"].cumsum()
-    df["NMSE_CUM"] = df["NMSE"].cumsum()
-    df["NRMSE_CUM"] = df["NRMSE"].cumsum()
-
-    # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
-    # df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()
-    # df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()
-    # df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()
-    # df["NRMSE"] = df["NMSE"] ** 0.5 
-
-    # df["accuracy"] = round((1 - (abs(df["VAERDI"] - df["pred"]) + 1) / (df["VAERDI"] + 1)), 4) * 100
-
-    # df["pred"] = df["pred"] * max_VAERDI
-    # df["VAERDI"] = df["VAERDI"] * max_VAERDI
     if path is not None:
         df.to_csv(path, index=False)
     
     return df
 
+def get_days_error(df_evl, model, cols):
+    days = np.linspace(1,31,31)
+    days_errs = pd.DataFrame()
+    for d in days:
+        date_s = pd.to_datetime("2019-03-"+str(int(d))+" 00:00:00")
+        date_e = pd.to_datetime("2019-03-"+str(int(d))+" 23:00:00")
+        df = df_evl[df_evl["TIME_CET"] >= date_s][df_evl["TIME_CET"] <= date_e].sort_values(["TIME_CET"]).reset_index(drop=True)
+        df_err = model_evaluation(df, cols, model)
+        days_errs = days_errs.append(df_err)
 
-def model_improvement(errors:dict):
+    return days_errs
+
+NRMSE_all = lambda df :(((abs(df["VAERDI"].sum() - df["pred"].sum())) ** 2)/ df["VAERDI"].sum() )** 0.5
+
+
+# def model_evaluation(dfevl, features, model, ahead=None, path=None):
+#     df = dfevl.copy()
+#     model.eval()
+#     with torch.no_grad():
+#         x_test_tensor = torch.tensor(df[features].values, dtype = torch.float)
+#         y_pred_tensor = model(x_test_tensor)
+#         df["pred"] = y_pred_tensor.detach().flatten().numpy() 
+
+
+#     max_VAERDI = df["max_VAERDI"][0]
+
+#     # Convert to megawatt (A megawatt hour (Mwh) is equal to 1,000 Kilowatt hours (Kwh))
+#     df["pred"] = df["pred"] * max_VAERDI / 1000
+#     df["VAERDI"] = df["VAERDI"] * max_VAERDI / 1000
+
+#     df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
+#     df.columns = ["TIME_CET", "VAERDI", "pred"]
+    
+#     if ahead:
+#         df["pred"][ahead:len(df)] = df["pred"][0:len(df)-1]
+#         df = df.drop(df.tail(1).index)
+
+#     # df = df.reset_index()
+
+#     # df["VAERDI"] = df["VAERDI"].sum()
+#     df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI"].cumsum()
+#     df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI"].cumsum()
+#     df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum()
+#     df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum() )** 0.5
+
+#     # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
+#     df["BIAS_IDV"] = (df["VAERDI"] - df["pred"])/ df["VAERDI"]
+#     df["MAE_IDV"] = (abs(df["VAERDI"] - df["pred"])) + 1/ (df["VAERDI"] + 1)
+#     df["MSE_IDV"] = (((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1)
+#     df["RMSE_IDV"] = ((((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1) )** 0.5
+
+#     # df["NBIAS_CUM"] = df["NBIAS"].cumsum()
+#     # df["NMAE_CUM"] = df["NMAE"].cumsum()
+#     # df["NMSE_CUM"] = df["NMSE"].cumsum()
+#     # df["NRMSE_CUM"] = df["NRMSE"].cumsum()
+
+#     # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
+#     # df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()
+#     # df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()
+#     # df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()
+#     # df["NRMSE"] = df["NMSE"] ** 0.5 
+
+#     # df["accuracy"] = round((1 - (abs(df["VAERDI"] - df["pred"]) + 1) / (df["VAERDI"] + 1)), 4) * 100
+
+#     # df["pred"] = df["pred"] * max_VAERDI
+#     # df["VAERDI"] = df["VAERDI"] * max_VAERDI
+#     if path is not None:
+#         df.to_csv(path, index=False)
+    
+#     return df
+
+
+def model_improvement(errors:dict, col):
     """
     Compare the improvements of models
     """
@@ -288,7 +344,7 @@ def model_improvement(errors:dict):
         ecrefs = errors.copy()
         ec = ecrefs.pop(ecname)
         for ecrefname, ecref in ecrefs.items():
-            I = 100 * (ecref["NRMSE_IDV"] - ec["NRMSE_IDV"]) / (ecref["NRMSE_IDV"])
+            I = 100 * (ecref[col] - ec[col]) / (ecref[col])
             df[ecrefname] = I
         Imp[ecname] = df
 
