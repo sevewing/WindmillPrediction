@@ -141,11 +141,11 @@ def roughness_simulation(ls, h_range, path=None):
     plt.ylim(0, 110)
     x_new = np.linspace(0,11,100)
     for rn, ws in ls.iterrows():
-        if rn == 0.5 or rn == 0.05:
+        if rn == 0.000001:
             plt.plot(ws, h_range, label='{:f}'.format(rn).rstrip('0'), linewidth=4)
         else:
             plt.plot(ws, h_range, label='{:f}'.format(rn).rstrip('0'))
-    plt.axvline(x=6, color='gray', linestyle='--')
+    # plt.axvline(x=6, color='gray', linestyle='--')
     plt.xlabel("Wind Speed (m/s)")
     plt.ylabel("AGL (m)")
     plt.legend(loc="upper left")

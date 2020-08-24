@@ -29,8 +29,8 @@ windmill_PH_SC_path = "./data/windmill_PH_SC.csv"
 
 SL_SC_TRAIN_path = "./traintestdata/SL_SC_TRAIN.parquet"
 SL_SC_EVL_path = "./traintestdata/SL_SC_EVL.parquet"
-# SL_SC_TRAIN_B_path = "./traintestdata/SL_SC_TRAIN_B.parquet"
-# SL_SC_EVL_B_path = "./traintestdata/SL_SC_EVL_B.parquet"
+SL_SC_TRAIN_minmax_path = "./traintestdata/SL_SC_TRAIN_minmax.parquet"
+SL_SC_EVL_minmax_path = "./traintestdata/SL_SC_EVL_minmax.parquet"
 
 SH_SC_TRAIN_path = "./traintestdata/SH_SC_TRAIN.parquet"
 SH_SC_EVL_path = "./traintestdata/SH_SC_EVL.parquet"

@@ -21,6 +21,10 @@ class MLP_Regression(nn.Module):
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, 1)
     self.d = nn.Dropout(p=0.5)
+
+    f_active = F.tanh if f_active == "tanh" else f_active
+    f_active = F.leaky_relu if f_active == "leaky_relu" else f_active
+    f_active = F.relu if f_active == "relu" else f_active
     self.f_active = f_active
 
   def forward(self, x):
@@ -80,15 +84,27 @@ def create_sequences(data, seq_length):
 
 
 def train_model(
-    model, 
+   input_size,
+    hidden_size,
+    f_active,
     lr,
     num_epochs,
     X_train, 
     y_train, 
     X_test=None, 
     y_test=None,
+    loss_record=True, 
     path=None
     ):
+
+    model = MLP_Regression(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            f_active = f_active
+            )
+    # NOTE: this is required for the ``fork`` method to work
+    model.share_memory()
+
     loss_fn = torch.nn.SmoothL1Loss()
 
     optimiser = torch.optim.Adam(model.parameters(), lr=lr)
@@ -104,19 +120,20 @@ def train_model(
         y_pred = model(X_train)
         loss = loss_fn(y_pred.float(), y_train)
 
-        if X_test is not None:
-            with torch.no_grad():
-                y_test_pred = model(X_test)
-                test_loss = loss_fn(y_test_pred.float(), y_test)
-            test_hist[t] = test_loss.item()
+        if loss_record:
+            if X_test is not None:
+                with torch.no_grad():
+                    y_test_pred = model(X_test)
+                    test_loss = loss_fn(y_test_pred.float(), y_test)
+                test_hist[t] = test_loss.item()
 
-            if t % 10 == 0 or t == num_epochs-1:  
-                print(f'Epoch {t} train loss: {loss.item()} test loss: {test_loss.item()}')
+                if t % 10 == 0 or t == num_epochs-1:  
+                    print(f'Epoch {t} train loss: {loss.item()} test loss: {test_loss.item()}')
 
-        elif t % 10 == 0:
-            print(f'Epoch {t} train loss: {loss.item()}')
+            elif t % 10 == 0:
+                print(f'Epoch {t} train loss: {loss.item()}')
 
-        train_hist[t] = loss.item()
+            train_hist[t] = loss.item()
 
         optimiser.zero_grad()
         loss.backward()
@@ -235,7 +252,7 @@ def model_evaluation(dfevl, features, model, days=True, ahead=None, path=None):
     df["VAERDI"] = df["VAERDI"] * max_VAERDI / 1000
     df["TIME_CET"] = df["TIME_CET"].astype(str)
     if days:
-        df["TIME_CET"] = df["TIME_CET"].apply(lambda x :x[5:10])
+        df["TIME_CET"] = df["TIME_CET"].apply(lambda x :x[:10])
     df = df.groupby("TIME_CET").agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
     df.columns = ["VAERDI", "pred"]
     

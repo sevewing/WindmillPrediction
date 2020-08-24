@@ -21,8 +21,8 @@ get_ws_hub_pow_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exp
 get_ws_hub_pow_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
 
 
-# get_ws_hub_log_r_u = lambda x :log_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
-# get_ws_hub_log_r_v = lambda x :log_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
+get_ws_hub_log_r_u = lambda x :log_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
+get_ws_hub_log_r_v = lambda x :log_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
 
 # get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
 # get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
