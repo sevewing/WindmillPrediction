@@ -1,3 +1,10 @@
+"""
+@ models.py: Netual Models, Validation and Evaluation.
+@ Thesis: Geographical Data and Predictions of Windmill Energy Production
+@ Weisi Li
+@ liwb@itu.dk, liweisi8121@hotmail.com
+"""
+
 import numpy as np
 import pandas as pd
 import time
@@ -7,35 +14,39 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import r2_score
-# from sklearn.model_selection import TimeSeriesSplit
 
 from constant import model_path, error_path
 
 
 class MLP_Regression(nn.Module):
+    """
+    MLP Regression Model
+    """
+    def __init__(self, input_size, hidden_size, f_active, bias=0):
+        super(MLP_Regression, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc1.bias.data.fill_(bias)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.fc3 = nn.Linear(hidden_size, 1)
+        self.d = nn.Dropout(p=0.5)
 
-  def __init__(self, input_size, hidden_size, f_active, bias=0):
-    super(MLP_Regression, self).__init__()
-    self.fc1 = nn.Linear(input_size, hidden_size)
-    self.fc1.bias.data.fill_(bias)
-    self.fc2 = nn.Linear(hidden_size, hidden_size)
-    self.fc3 = nn.Linear(hidden_size, 1)
-    self.d = nn.Dropout(p=0.5)
+        f_active = F.sigmoid
+        f_active = F.tanh if f_active == "tanh" else f_active
+        f_active = F.leaky_relu if f_active == "leaky_relu" else f_active
+        f_active = F.relu if f_active == "relu" else f_active
+        self.f_active = f_active
 
-    f_active = F.tanh if f_active == "tanh" else f_active
-    f_active = F.leaky_relu if f_active == "leaky_relu" else f_active
-    f_active = F.relu if f_active == "relu" else f_active
-    self.f_active = f_active
-
-  def forward(self, x):
-    x = self.f_active(self.fc1(x))
-    # x = self.f_active(self.fc2(x))
-    x = self.fc3(x)
-
-    return x
+    def forward(self, x):
+        x = self.f_active(self.fc1(x))
+        # x = self.f_active(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
 
 class LSTM_Regression(nn.Module):
+    """
+    LSTM Regression Model
+    """
 
     def __init__(self, input_size, hidden_size, seq_len, n_layers=2):
         super(LSTM_Regression, self).__init__()
@@ -71,6 +82,9 @@ class LSTM_Regression(nn.Module):
 
 
 def create_sequences(data, seq_length):
+    """
+    Create Sequences for LSTM
+    """
     xs = []
     ys = []
 
@@ -82,9 +96,58 @@ def create_sequences(data, seq_length):
 
     return np.array(xs), np.array(ys)
 
-
 def train_model(
-   input_size,
+    model, 
+    lr,
+    num_epochs,
+    X_train, 
+    y_train, 
+    X_test=None, 
+    y_test=None,
+    path=None
+    ):
+    loss_fn = torch.nn.SmoothL1Loss()
+
+    optimiser = torch.optim.Adam(model.parameters(), lr=lr)
+    num_epochs = num_epochs
+
+    train_hist = np.zeros(num_epochs)
+    test_hist = np.zeros(num_epochs)
+
+    for t in range(num_epochs):
+        if model is LSTM_Regression:
+            model.reset_hidden_state()
+ 
+        y_pred = model(X_train)
+        loss = loss_fn(y_pred.float(), y_train)
+
+        if X_test is not None:
+            with torch.no_grad():
+                y_test_pred = model(X_test)
+                test_loss = loss_fn(y_test_pred.float(), y_test)
+            test_hist[t] = test_loss.item()
+
+            if t % 10 == 0 or t == num_epochs-1:  
+                print(f'Epoch {t} train loss: {loss.item()} test loss: {test_loss.item()}')
+
+        elif t % 10 == 0:
+            print(f'Epoch {t} train loss: {loss.item()}')
+
+        train_hist[t] = loss.item()
+
+        optimiser.zero_grad()
+        loss.backward()
+        optimiser.step()
+
+    if path is not None:
+        torch.save(model, path)
+
+    return model.eval(), train_hist, test_hist
+
+
+
+def train_model_flexible(
+    input_size,
     hidden_size,
     f_active,
     lr,
@@ -102,7 +165,7 @@ def train_model(
             hidden_size=hidden_size,
             f_active = f_active
             )
-    # NOTE: this is required for the ``fork`` method to work
+    
     model.share_memory()
 
     loss_fn = torch.nn.SmoothL1Loss()
@@ -147,6 +210,9 @@ def train_model(
 
 
 def timeseries_kfold_validation_training(df, features, target, n_groups, model, lr=0.001, num_epochs=30):
+    """
+    KFold Validation
+    """
     st = time.time()
 
     dtype = torch.float
@@ -184,9 +250,6 @@ def timeseries_kfold_validation_training(df, features, target, n_groups, model, 
                                         x_test_tensor, 
                                         y_test_tensor
                                         )
-        
-        # train_hists.extend(train_hist.tolist())
-        # test_hists.extend(test_hist.tolist())
         
         k_scores.append(np.mean(test_hist.tolist()))
 
@@ -236,7 +299,14 @@ def train_test_validation(df, features, model, lr=0.001, num_epochs=30):
 
     return train_hists, test_hists
 
+
+RMSE_all = lambda df :(((df["VAERDI"] - df["pred"]) ** 2).sum() / len(df) )** 0.5
+NRMSE_all = lambda df : (((df["VAERDI"] - df["pred"]) ** 2).sum() / len(df) )** 0.5 * len(df)/ df["VAERDI"].sum()
+
 def model_evaluation(dfevl, features, model, days=True, ahead=None, path=None):
+    """
+    Evaluation model in hourly or daily
+    """
     df = dfevl.copy()
     model.eval()
     with torch.no_grad():
@@ -251,102 +321,30 @@ def model_evaluation(dfevl, features, model, days=True, ahead=None, path=None):
     df["pred"] = df["pred"] * max_VAERDI / 1000
     df["VAERDI"] = df["VAERDI"] * max_VAERDI / 1000
     df["TIME_CET"] = df["TIME_CET"].astype(str)
-    if days:
-        df["TIME_CET"] = df["TIME_CET"].apply(lambda x :x[:10])
-    df = df.groupby("TIME_CET").agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
-    df.columns = ["VAERDI", "pred"]
     
-    if ahead:
+    df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
+    df.columns = ["TIME_CET", "VAERDI", "pred"]
+    
+    if type(ahead) == int:
         df["pred"][ahead:len(df)] = df["pred"][0:len(df)-1]
         df = df.drop(df.tail(1).index)
 
-    # df["VAERDI"] = df["VAERDI"].sum()
-    # df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI"].cumsum()
+    if days:
+        df["TIME_CET"] = df["TIME_CET"].apply(lambda x :x[:10])
+        df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
+        df.columns = ["TIME_CET", "VAERDI", "pred"]
+ 
     df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI"].cumsum()
     df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum()
-    df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum() )** 0.5
-
-    # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
-    # df["BIAS_IDV"] = (df["VAERDI"] - df["pred"])/ df["VAERDI"]
-    # df["MAE_IDV"] = (abs(df["VAERDI"] - df["pred"])) + 1/ (df["VAERDI"] + 1)
-    # df["MSE_IDV"] = (((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1)
-    # df["RMSE_IDV"] = ((((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1) )** 0.5
+    df["RMSE"] = (((df["VAERDI"] - df["pred"]) ** 2).cumsum()/ len(df) )** 0.5
+    df["NRMSE"] = (((df["VAERDI"] - df["pred"]) ** 2).cumsum() / df["VAERDI"].cumsum() )** 0.5
+    # df["NRMSE"] = (((df["VAERDI"] - df["pred"]) ** 2).cumsum() / len(df) )** 0.5 * len(df)/ df["VAERDI"].cumsum()
+    
 
     if path is not None:
         df.to_csv(path, index=False)
     
     return df
-
-def get_days_error(df_evl, model, cols):
-    days = np.linspace(1,31,31)
-    days_errs = pd.DataFrame()
-    for d in days:
-        date_s = pd.to_datetime("2019-03-"+str(int(d))+" 00:00:00")
-        date_e = pd.to_datetime("2019-03-"+str(int(d))+" 23:00:00")
-        df = df_evl[df_evl["TIME_CET"] >= date_s][df_evl["TIME_CET"] <= date_e].sort_values(["TIME_CET"]).reset_index(drop=True)
-        df_err = model_evaluation(df, cols, model)
-        days_errs = days_errs.append(df_err)
-
-    return days_errs
-
-NRMSE_all = lambda df :(((abs(df["VAERDI"].sum() - df["pred"].sum())) ** 2)/ df["VAERDI"].sum() )** 0.5
-
-
-# def model_evaluation(dfevl, features, model, ahead=None, path=None):
-#     df = dfevl.copy()
-#     model.eval()
-#     with torch.no_grad():
-#         x_test_tensor = torch.tensor(df[features].values, dtype = torch.float)
-#         y_pred_tensor = model(x_test_tensor)
-#         df["pred"] = y_pred_tensor.detach().flatten().numpy() 
-
-
-#     max_VAERDI = df["max_VAERDI"][0]
-
-#     # Convert to megawatt (A megawatt hour (Mwh) is equal to 1,000 Kilowatt hours (Kwh))
-#     df["pred"] = df["pred"] * max_VAERDI / 1000
-#     df["VAERDI"] = df["VAERDI"] * max_VAERDI / 1000
-
-#     df = df.groupby("TIME_CET", as_index=False).agg({"VAERDI" : lambda x : x.sum(), "pred" : lambda x : x.sum()})
-#     df.columns = ["TIME_CET", "VAERDI", "pred"]
-    
-#     if ahead:
-#         df["pred"][ahead:len(df)] = df["pred"][0:len(df)-1]
-#         df = df.drop(df.tail(1).index)
-
-#     # df = df.reset_index()
-
-#     # df["VAERDI"] = df["VAERDI"].sum()
-#     df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()/ df["VAERDI"].cumsum()
-#     df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()/ df["VAERDI"].cumsum()
-#     df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum()
-#     df["NRMSE"] = (((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()/ df["VAERDI"].cumsum() )** 0.5
-
-#     # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
-#     df["BIAS_IDV"] = (df["VAERDI"] - df["pred"])/ df["VAERDI"]
-#     df["MAE_IDV"] = (abs(df["VAERDI"] - df["pred"])) + 1/ (df["VAERDI"] + 1)
-#     df["MSE_IDV"] = (((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1)
-#     df["RMSE_IDV"] = ((((abs(df["VAERDI"] - df["pred"])) + 1) ** 2)/ (df["VAERDI"] + 1) )** 0.5
-
-#     # df["NBIAS_CUM"] = df["NBIAS"].cumsum()
-#     # df["NMAE_CUM"] = df["NMAE"].cumsum()
-#     # df["NMSE_CUM"] = df["NMSE"].cumsum()
-#     # df["NRMSE_CUM"] = df["NRMSE"].cumsum()
-
-#     # df["VAERDI_cumsum"] = df["VAERDI"].cumsum()
-#     # df["NBIAS"] = (df["VAERDI"] - df["pred"]).cumsum()
-#     # df["NMAE"] = (abs(df["VAERDI"] - df["pred"])).cumsum()
-#     # df["NMSE"] = ((abs(df["VAERDI"] - df["pred"])) ** 2).cumsum()
-#     # df["NRMSE"] = df["NMSE"] ** 0.5 
-
-#     # df["accuracy"] = round((1 - (abs(df["VAERDI"] - df["pred"]) + 1) / (df["VAERDI"] + 1)), 4) * 100
-
-#     # df["pred"] = df["pred"] * max_VAERDI
-#     # df["VAERDI"] = df["VAERDI"] * max_VAERDI
-#     if path is not None:
-#         df.to_csv(path, index=False)
-    
-#     return df
 
 
 def model_improvement(errors:dict, col):
@@ -367,3 +365,35 @@ def model_improvement(errors:dict, col):
 
         r2[ecname] = round(r2_score(ec["VAERDI"], ec["pred"]), 3)
     return Imp, r2
+
+
+def Grid_Search(x_train_tensor, y_train_tensor, df_evl, df_train, paras, input_size, cols):
+    grid_results = pd.DataFrame(columns=["NRMSE_train_all","NRMSE_evl_all", "NRMSE_train_var", "NRMSE_evl_var", "R2_train", "R2_evl", "time"])
+    for i, para in enumerate(paras):
+        start = time.time()
+        model, _, _ = train_model_flexible(input_size = input_size,
+                                hidden_size = para[0],
+                                f_active = para[1],
+                                lr = para[2],
+                                num_epochs = para[3],
+                                X_train = x_train_tensor, 
+                                y_train = y_train_tensor,
+                                loss_record=False)
+        end = time.time()
+
+        model_train_errs = model_evaluation(df_train, cols, model, days=True)
+        model_evl_errs = model_evaluation(df_evl, cols, model, days=True)
+        
+        r2_train = round(r2_score(model_train_errs["VAERDI"], model_train_errs["pred"]), 2)
+        r2_evl = round(r2_score(model_evl_errs["VAERDI"], model_evl_errs["pred"]), 2)
+
+        grid_results = grid_results.append({"NRMSE_train_all": NRMSE_all(model_train_errs),
+                                            "NRMSE_evl_all": NRMSE_all(model_evl_errs),
+                                            "NRMSE_train_var": model_train_errs["NRMSE"].std(), 
+                                            "NRMSE_evl_var": model_evl_errs["NRMSE"].std(), 
+                                            "R2_train": r2_train, 
+                                            "R2_evl": r2_evl,
+                                            "time": end - start}, 
+                                            ignore_index=True)
+        print(i, " Done")
+    return grid_results

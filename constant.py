@@ -1,43 +1,26 @@
-# from pyspark.sql.types import *
+"""
+@ constant.py: path, features columns, schemas
+@ Thesis: Geographical Data and Predictions of Windmill Energy Production
+@ Weisi Li
+@ liwb@itu.dk, liweisi8121@hotmail.com
+"""
 
-# windmill_same_cond_path = "./data/windmills_same_cond.csv"
-# settlement_12_path = "./data/ITU_DATA/settlement/201819_12_cleaned.parquet"
-
-# ws10_c_path = "./data/ITU_DATA/prognosis/ENetNEA/ws_10m_cmp.parquet"
-# ws100_c_path = "./data/ITU_DATA/prognosis/ENetNEA/ws_100m_cmp.parquet"
-# wu10_path = "./data/ITU_DATA/prognosis/ENetNEA/wu_10m.parquet"
-# wv10_path = "./data/ITU_DATA/prognosis/ENetNEA/wv_10m.parquet"
-# wu100_path = "./data/ITU_DATA/prognosis/ENetNEA/wu_100m.parquet"
-# wv100_path = "./data/ITU_DATA/prognosis/ENetNEA/wv_100m.parquet"
-# tmp2_c_path = "./data/ITU_DATA/prognosis/ENetNEA/temperatur_2m_compress.parquet" 
-# tmp100_c_path = "./data/ITU_DATA/prognosis/ENetNEA/temperatur_100m_compress.parquet" 
-# wd10_path = "/datasets/energinet/prognosis/ENetNEA/wind_direction_10m.parquet"
-# wd100_path = "/datasets/energinet/prognosis/ENetNEA/wind_direction_100m.parquet" 
-# model_path = "./model.parquet"
-
+# Load Path
 windmill_path = "./data/windmill_cleaned.csv"
-windmill_park_path = "./data/windmill_park_cleaned.csv"
-# windmill_geo_analysis_path = "data/windmill_for_geoanalysis.csv"
 windmill_SL_path = "./data/windmill_SL.csv"
-# windmill_SL_path = "./data/windmill_SL_SC.csv"
-# windmill_SL_path = "./data/windmill_SL_SC.csv"
-# windmill_SL_path = "./data/windmill_SL_SC.csv"
 windmill_SL_SC_path = "./data/windmill_SL_SC.csv"
 windmill_SH_SC_path = "./data/windmill_SH_SC.csv"
 windmill_PL_SC_path = "./data/windmill_PL_SC.csv"
 windmill_PH_SC_path = "./data/windmill_PH_SC.csv"
 
-SL_SC_TRAIN_path = "./traintestdata/SL_SC_TRAIN.parquet"
-SL_SC_EVL_path = "./traintestdata/SL_SC_EVL.parquet"
-SL_SC_TRAIN_minmax_path = "./traintestdata/SL_SC_TRAIN_minmax.parquet"
-SL_SC_EVL_minmax_path = "./traintestdata/SL_SC_EVL_minmax.parquet"
-
-SH_SC_TRAIN_path = "./traintestdata/SH_SC_TRAIN.parquet"
-SH_SC_EVL_path = "./traintestdata/SH_SC_EVL.parquet"
-PL_SC_TRAIN_path = "./traintestdata/PL_SC_TRAIN.parquet"
-PL_SC_EVL_path = "./traintestdata/PL_SC_EVL.parquet"
-PH_SC_TRAIN_path = "./traintestdata/PH_SC_TRAIN.parquet"
-PH_SC_EVL_path = "./traintestdata/PH_SC_EVL.parquet"
+SL_SC_TRAIN_path = "./data/traintestdata/SL_SC_TRAIN.parquet"
+SL_SC_EVL_path = "./data/traintestdata/SL_SC_EVL.parquet"
+SH_SC_TRAIN_path = "./data/traintestdata/SH_SC_TRAIN.parquet"
+SH_SC_EVL_path = "./data/traintestdata/SH_SC_EVL.parquet"
+PL_SC_TRAIN_path = "./data/traintestdata/PL_SC_TRAIN.parquet"
+PL_SC_EVL_path = "./data/traintestdata/PL_SC_EVL.parquet"
+PH_SC_TRAIN_path = "./data/traintestdata/PH_SC_TRAIN.parquet"
+PH_SC_EVL_path = "./data/traintestdata/PH_SC_EVL.parquet"
 
 settlement_path = "./data/ITU_DATA/settlement/201{8,9}_cleaned.parquet"
 settlement_2018_path = "./data/ITU_DATA/settlement/2018_cleaned.parquet"
@@ -56,6 +39,7 @@ wd100_path = "./data/ITU_DATA/prognosis/ENetNEA/wd_100m_cmp.parquet"
 tmp2_path = "./data/ITU_DATA/prognosis/ENetNEA/tmp_2m_cmp.parquet" 
 tmp100_path = "./data/ITU_DATA/prognosis/ENetNEA/tmp_100m_cmp.parquet" 
 
+# Original
 # ws10_path = "data/ITU_DATA/prognosis/ENetNEA/wind_speed_10m.parquet"
 # ws100_path = "data/ITU_DATA/prognosis/ENetNEA/wind_speed_100m.parquet"
 # wd10_path = "data/ITU_DATA/prognosis/ENetNEA/wind_direction_10m.parquet"
@@ -63,11 +47,12 @@ tmp100_path = "./data/ITU_DATA/prognosis/ENetNEA/tmp_100m_cmp.parquet"
 # tmp2_path = "data/ITU_DATA/prognosis/ENetNEA/temperatur_2m.parquet" 
 # tmp100_path = "data/ITU_DATA/prognosis/ENetNEA/temperatur_100m.parquet" 
 
+# Save Path
 error_path = "./result/errors/"
 model_path = "./result/model/"
 plot_path = "./result/plot/"
 
-
+# Model Features
 org_cols = ['Capacity_kw', 'Navhub_height', 'Rotor_diameter', 
 'wu10', 'wv10', 'wu100', 'wv100', 'tmp2', 'tmp100',
 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
@@ -93,6 +78,7 @@ semigeo_cols = ['Capacity_kw', 'Rotor_diameter',
 'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19', 'h20', 'h21', 'h22', 'h23']
 
 
+# Spark Schemas
 # settlement_schema = StructType([
 #     StructField("GSRN", StringType(), False),
 #     StructField("VAERDI", StringType(), False),

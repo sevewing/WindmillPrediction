@@ -1,3 +1,10 @@
+"""
+@ myplot.py: plot tools
+@ Thesis: Geographical Data and Predictions of Windmill Energy Production
+@ Weisi Li
+@ liwb@itu.dk, liweisi8121@hotmail.com
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rcParams, cycler
@@ -5,9 +12,13 @@ cmap = plt.cm.winter
 from constant import plot_path
 
 coldic = {"Original":"#394a6d", "Windshear":"#3c9d9b", "Geo":"#52de97", "Semigeo":"#9ACC8F", "Measured Power":"#DE5299"}
+plt.rcParams['axes.labelsize'] = 16
+plt.rcParams['axes.titlesize'] = 16
 
-
-def model_loss(train_test_hist, path=None):
+def model_loss(train_test_hist:dict, path=None):
+    """
+    Plot model loss function
+    """
     plt.figure(figsize=(20,7))
     for label, th in train_test_hist.items():
         plt.plot(th, label=label)
@@ -18,11 +29,11 @@ def model_loss(train_test_hist, path=None):
         plt.savefig(path, dpi=150, bbox_inches='tight')
 
 
-def timelines(time, ys, xlabel="", ylabel="", tp="line", fulltime=True, figsize=(30,7), path=None):
-    if fulltime:
-        time = time.apply(str)
-        time = time.apply(lambda x: x[-11:-6])
-        time_gap = [x for x in time if x[-2:]=='23']
+def timelines(time, ys, xlabel="", ylabel="", tp="line", path=None):
+    """
+    Timeline Plot suitibal for daily
+    """
+    figsize=(30,7)
 
     if tp=="line":
         plt.figure(figsize=figsize)
@@ -32,10 +43,37 @@ def timelines(time, ys, xlabel="", ylabel="", tp="line", fulltime=True, figsize=
         plt.figure(figsize=figsize)
         for label, th in ys.items():
             plt.scatter(time, th, label=label, marker='o', color=coldic[label])
-    if fulltime and len(time_gap) > 1:
-        for i in range(0, len(time_gap)-1):    
-            plt.axvline(x=time_gap[i], color='gray', linestyle='--')
-    plt.xticks(rotation=75)
+
+    plt.xticks(time, rotation=75)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.grid(True, axis='y')
+    plt.legend()
+    # plt.show()
+    if path is not None:
+        plt.savefig(path, dpi=150, bbox_inches='tight')
+
+def timelines_longtime(time, ys, xlabel="", ylabel="", tp="line", path=None):
+    """
+    Timeline Plot suitibal for hourly
+    """
+    figsize=(45,7)
+    time = time.apply(str)
+    time = time.apply(lambda x: x[-11:-6])
+    time_gap = [x for x in time if x[-2:]=='23']
+
+    if tp=="line":
+        plt.figure(figsize=figsize)
+        for label, th in ys.items():
+            plt.plot(time, th, label=label, linewidth=2, color=coldic[label])
+    elif tp=="scatter":
+        plt.figure(figsize=figsize)
+        for label, th in ys.items():
+            plt.scatter(time, th, label=label, marker='o', color=coldic[label])
+
+    for i in range(0, len(time_gap)-1):    
+        plt.axvline(x=time_gap[i], color='gray', linestyle='--')
+    plt.xticks([])
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.grid(True, axis='y')
@@ -46,6 +84,9 @@ def timelines(time, ys, xlabel="", ylabel="", tp="line", fulltime=True, figsize=
 
 
 def ploynomial_quantile_windpower_curves(X, ys, scatterplt=[], boundary=[], degree=3):
+    """
+    Power curves by Ploynomial Regression
+    """
     plt.figure(figsize=(10,10))
     if len(scatterplt) > 0:
         plt.scatter(scatterplt[0], scatterplt[1], alpha=0.1, color="k")
@@ -74,35 +115,10 @@ def ploynomial_quantile_windpower_curves(X, ys, scatterplt=[], boundary=[], degr
         plt.plot(X, pred, linewidth=2)
 
 
-def wind_power_scatter(df_1_wsr,df_1_rn,df_2_wsr,df_2_rn, feature, xlim):
-    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(14, 14))
-
-    axs[0, 0].set_title("Windmill_1 Wind Shear")
-    axs[0, 0].scatter(df_1_wsr["hws_uv_wsr"], df_1_wsr["VAERDI"], color='C0')
-    axs[0, 0].set_xlim(xlim)
-    axs[0, 0].set_xlabel("Wind Speed (m/s)")
-    axs[0, 0].set_ylabel("Generation Power (kw)")
-
-    axs[1, 0].set_title("Windmill_1 Roughness")
-    axs[1, 0].scatter(df_1_rn["hws_uv_rn"], df_1_rn["VAERDI"], color='C1')
-    axs[1, 0].set_xlim(xlim)
-    axs[1, 0].set_xlabel("Wind Speed (m/s)")
-    axs[1, 0].set_ylabel("Generation Power (kw)")
-
-    axs[0, 1].set_title("Windmill_2 Wind Shear")
-    axs[0, 1].scatter(df_2_wsr["hws_uv_wsr"], df_2_wsr["VAERDI"], color='C0')
-    axs[0, 1].set_xlim(xlim)
-    axs[0, 1].set_xlabel("Wind Speed (m/s)")
-    axs[0, 1].set_ylabel("Generation Power (kw)")
-
-    axs[1, 1].set_title("Windmill_2 Roughness")
-    axs[1, 1].scatter(df_2_rn["hws_uv_rn"], df_2_rn["VAERDI"], color='C1')
-    axs[1, 1].set_xlim(xlim)
-    axs[1, 1].set_xlabel("Wind Speed (m/s)")
-    axs[1, 1].set_ylabel("Generation Power (kw)")
-
-
 def geo_precentage(df, features, path=None):
+    """
+    Plot the Precentage of Geo Features under Windmills(SL, SH, PL, PH)
+    """
     labels = df.index.to_list()
     data = df[features].values 
     data_cum = data.cumsum(axis=1)
@@ -136,6 +152,9 @@ def geo_precentage(df, features, path=None):
 
 
 def roughness_simulation(ls, h_range, path=None):
+    """
+    Plot Wind Profile
+    """
     plt.figure(figsize=(10, 10))
     plt.xlim(0, 10.5)
     plt.ylim(0, 110)
@@ -155,6 +174,9 @@ def roughness_simulation(ls, h_range, path=None):
 
 
 def k_fold_validation(n_groups, k_scores, path=None):
+    """
+    Plot k_scores
+    """
     k_range = range(1, n_groups) 
     plt.figure(figsize=(10, 7))
     plt.plot(k_range, k_scores, marker='o')  
@@ -162,5 +184,23 @@ def k_fold_validation(n_groups, k_scores, path=None):
     plt.xlabel('Value of K')
     plt.ylabel('Cross-Validated SmoothL1Loss')  
     # plt.show()
+    if path is not None:
+        plt.savefig(path, dpi=150, bbox_inches='tight')
+
+
+def err_distribution(df, path, round_as=0):
+    """
+    Plot Error Distribution
+    """
+    plt.plot(figsize=(6, 6))
+    df = round(df, round_as)
+    y = df.groupby("RMSE", as_index=False)["VAERDI"].count()
+    y = y[y["VAERDI"]>0]
+    x = range(0, len(y))
+    plt.bar(x, y["VAERDI"], width=0.5)
+    plt.xticks(x, y["RMSE"].to_list(),rotation=70)
+    plt.yticks(range(y["VAERDI"].max()+1))
+    plt.ylabel("Number of Samples", fontsize=13)
+    plt.xlabel("RMSE(MW)", fontsize=13)
     if path is not None:
         plt.savefig(path, dpi=150, bbox_inches='tight')

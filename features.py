@@ -1,13 +1,18 @@
+"""
+@ features.py: Feature Engineering
+@ Thesis: Geographical Data and Predictions of Windmill Energy Production
+@ Weisi Li
+@ liwb@itu.dk, liweisi8121@hotmail.com
+"""
+
 import pandas as pd
 import numpy as np
-# from math import log
 import time
+from math import log,sqrt,atan2,pi,cos,sin
 from multiprocessing import  Pool
 
 from sklearn.preprocessing import LabelBinarizer
 from scipy.interpolate import interp1d
-
-from tools import pow_exponent, pow_law, log_law,rn_exponent, thermal_interpolation
 
 
 get_ahead = None
@@ -19,13 +24,8 @@ get_weather = lambda x, fun: fun(x["grid"], x["TIME_CET"])
 
 get_ws_hub_pow_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
 get_ws_hub_pow_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], rn_exponent(x["Roughness"]) if x["Roughness"]>=0.001 else rn_exponent(0.001))
-
-
 get_ws_hub_log_r_u = lambda x :log_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
 get_ws_hub_log_r_v = lambda x :log_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
-
-# get_ws_hub_r_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], x["Roughness"])
-# get_ws_hub_r_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], x["Roughness"])
 
 get_ws_hub_wsr_u = lambda x :pow_law(x["wu10"], 10, x["Navhub_height"], x["wsr_u"])
 get_ws_hub_wsr_v = lambda x :pow_law(x["wv10"], 10, x["Navhub_height"], x["wsr_v"])
@@ -36,6 +36,60 @@ get_ws_by_uv = lambda u, v : (u ** 2 + v ** 2) ** 0.5
 get_by_grid_tmp2 = None
 get_by_grid_tmp100 = None
 get_tmp_hub = lambda x :thermal_interpolation(x["tmp2"], x["tmp100"], 2, 100,  x["Navhub_height"])
+
+def to_vector(s, d):
+    """
+    Convert Wind speed and wind direction to u, v component.
+    s: Wind speed
+    d: Wind direction
+    u: x-axis component
+    v: y-axis component
+    """
+    u = s * cos(pi/180 * (270-d))
+    v = s * sin(pi/180 * (270-d))
+    return u, v
+
+thermal_interpolation = lambda t1, t2, z1, z2, z_hat : (z_hat - z1) * (t2 - t1)  / (z2 - z1) + t1
+pow_law = lambda v, z, z_hat, a : v * ( (z_hat/z) ** a)
+log_law = lambda v, z, z_hat, rl : v * np.log(z_hat/rl) / np.log(z/rl)
+rn_exponent = lambda rn : 0.096 * np.log10(rn) + 0.016 * np.log10(rn) ** 2 + 0.24
+
+def pow_exponent(v1, v2, z1, z2):
+    """
+    Calaulate windshear in reverse by two layers
+    """
+    a1 = abs(v1)
+    a2 = abs(v2)
+    if v1 < 0 and v2 >= 0 or v1 >= 0 and v2 < 0:
+        a2 = a1 + a2
+    exp = np.log(a2/(a1+1e-06)+1e-06) / np.log(z2/z1)
+    return exp
+
+
+def wind_vinterp_exp(u1, v1, u2, v2, z_hat):
+    """
+    Wind u,v component vertical interpolation by a invert calculation of exponent.
+    u1, v1 at height(AGL) 10m
+    u2, v2 at height(AGL) 100m
+    z_hat: a target height
+    """
+    exp_u = pow_exponent(u1, u2, 10, 100)
+    exp_v = pow_exponent(v1, v2, 10, 100)
+    u_i = round(pow_law(u1, 10, z_hat, exp_u),3)
+    v_i = round(pow_law(v1, 10, z_hat, exp_v),3)
+    return u_i, v_i
+
+def wind_vinterp_rn(u, v, z_hat, rl):
+    """
+    Wind u,v component vertical interpolation by roughness length.
+    u, v at height(AGL) 10m
+    z_hat: a target height
+    rl: roughness length
+    """
+    u_i = round(pow_law(u, 10, z_hat, rl),3)
+    v_i = round(pow_law(v, 10, z_hat, rl),3)
+    return u_i, v_i
+
 
 def get_by_grid(df, g, t):
     """
@@ -66,28 +120,6 @@ def fun_register(wu10, wv10, wu100, wv100, tmp2=None, tmp100=None):
 
     get_by_grid_tmp2 = lambda g, t: get_by_grid(tmp2, g, t)
     get_by_grid_tmp100 = lambda g, t: get_by_grid(tmp100, g, t) 
-
-
-# def _boundary_limit(df, f, boundary):
-#     df[f] = df[f].apply(lambda x: 0 if x < boundary[0] else x)
-#     # df[f] = df[f].apply(lambda x: 0 if x < boundary[0] else boundary[1] if x > boundary[1] else x)
-#     # df[f] = df[f].apply(lambda x: 0 if x < boundary[0] else boundary[1] if x > boundary[1] else x)
-#     try:
-#         index = df[df[f] == boundary[0]].index.values.astype(int)[0]
-#         for i in range(index):
-#             df.iloc[i][f] = boundary[0]
-#     except:
-#         pass
-
-#     # try:
-#     #     index = df[df[f] == boundary[1]].index.values.astype(int)[0]
-#     #     for i in range(index, len(temp)):
-#     #         df.iloc[i][f] = boundary[1]
-#     # except:
-#     #     pass
-
-#     return df
-
 
 
 def _extract_basic(df):
@@ -142,8 +174,6 @@ def _extract_tmp_intep(df):
     """
     Extract Temperature
     """
-    
-    # df["exp_tmp"] = df.apply(lambda x: pow_exponent(x["tmp2"], x["tmp100"], 2, 100), axis=1)
     df["htmp_inp"] = df.apply(lambda x: get_tmp_hub(x), axis=1)
     return df
 
@@ -167,6 +197,7 @@ def _extract_time(df):
 def extract_quantiles(df, feature):
     """
     Extract quantiles by interpolation 1d
+    (invalid)
     """
     ws_qual = df[[feature, "VAERDI"]]
     ws_qual[feature] = round(ws_qual[feature], 1)
@@ -185,8 +216,6 @@ def extract_quantiles(df, feature):
     for k in quantiles.keys():
         y = ws_qual[k]
         model = interp1d(X_1, y, bounds_error=False, fill_value='extrapolate')
-        # model = make_pipeline(PolynomialFeatures(3), Ridge())
-        # model.fit(X_1, y)
         models.append(model)
         ws_qual[k] = pd.Series(model(X_1))
         df[feature + "_" + k] = pd.Series(model(X_2))
@@ -196,7 +225,7 @@ def extract_quantiles(df, feature):
 
 def extract(df):
     """
-    Main extraction
+    Main extraction groups
     """
     df = _extract_basic(df)
     df = _extract_wsr_intep(df)
@@ -208,15 +237,6 @@ def extract(df):
     df = df.fillna(0)
     return df
 
-# def extract_park(df):
-#     """
-#     Main extraction
-#     """
-#     df = _extract_basic(df)
-#     df = _extract_time(df)
-
-#     df = df.fillna(0)
-#     return df
 
 def parallelize_extract(df, n_cores=4):
     """
@@ -226,10 +246,7 @@ def parallelize_extract(df, n_cores=4):
 
     df_split = np.array_split(df, n_cores)
     pool = Pool(n_cores)
-    # if tp == 'single':
     df = pd.concat(pool.map(extract, df_split))
-    # elif tp == 'park':
-    #     df = pd.concat(pool.map(extract_park, df_split))
     pool.close()
     pool.join()
 
